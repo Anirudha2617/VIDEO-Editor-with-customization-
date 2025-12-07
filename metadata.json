@@ -1,0 +1,7 @@
+{
+  "name": "Lumina Editor",
+  "description": "A professional-grade, AI-powered web video editor featuring a timeline sequencer, real-time preview, and integrated Gemini AI for asset and script generation.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
