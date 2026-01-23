@@ -13,12 +13,13 @@ import CodePanel from './components/panels/CodePanel';
 import AIPanel from './components/panels/AIPanel';
 import ShapesPanel from './components/panels/ShapesPanel';
 import TextPanel from './components/panels/TextPanel';
+import ScriptPanel from './components/panels/ScriptPanel';
 import { Asset, Clip, MediaType, Track, ExportSettings, Effect, AnimationType, Project, CustomFont } from './types';
-import { Download, Share2, Loader2, CheckCircle2, Undo2, Redo2, Copy, ClipboardPaste, Save, Upload, X } from 'lucide-react';
+import { Download, Undo2, Redo2, Save, X } from 'lucide-react';
 import { useEditorHistory } from './hooks/useEditorHistory';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAutosave } from './hooks/useAutosave';
-import { saveProject, loadProject, loadAutosave, exportProject, importProject } from './services/projectService';
+import { loadAutosave } from './services/projectService';
 
 const INITIAL_TRACKS: Track[] = [
   { id: 't1', type: MediaType.VIDEO, name: 'Video Track 1' },
@@ -272,6 +273,9 @@ function App() {
 
   // Asset Handlers
   const handleAddAsset = (asset: Asset) => setAssets(prev => [...prev, asset]);
+  const handleUpdateAsset = (assetId: string, updates: Partial<Asset>) => {
+    setAssets(prev => prev.map(a => a.id === assetId ? { ...a, ...updates } : a));
+  };
   const handleUploadFont = (font: CustomFont) => setCustomFonts(prev => [...prev, font]);
   const handleDragStart = (e: React.DragEvent, asset: Asset) => {
     e.dataTransfer.setData('assetId', asset.id);
@@ -488,7 +492,7 @@ function App() {
   // Window Manager State
   interface PanelState {
     id: string;
-    type: 'media' | 'audio' | 'text' | 'shapes' | 'fx' | 'code' | 'ai' | 'preview' | 'timeline' | 'export';
+    type: 'media' | 'audio' | 'text' | 'shapes' | 'fx' | 'code' | 'ai' | 'preview' | 'timeline' | 'export' | 'script';
     isOpen: boolean;
     position: { x: number; y: number };
     size: { width: string | number; height: string | number };
@@ -508,6 +512,7 @@ function App() {
     { id: 'fx', type: 'fx', isOpen: false, position: { x: 140, y: 160 }, size: { width: 300, height: 500 }, zIndex: 6, title: 'Effects & Transitions' },
     { id: 'code', type: 'code', isOpen: false, position: { x: 170, y: 180 }, size: { width: 400, height: 500 }, zIndex: 5, title: 'Code Editor' },
     { id: 'ai', type: 'ai', isOpen: false, position: { x: 200, y: 200 }, size: { width: 350, height: 600 }, zIndex: 4, title: 'AI Generator' },
+    { id: 'script', type: 'script', isOpen: false, position: { x: 230, y: 220 }, size: { width: 400, height: 500 }, zIndex: 4, title: 'Script Editor' },
     { id: 'export', type: 'export', isOpen: false, position: { x: 300, y: 100 }, size: { width: 300, height: 620 }, zIndex: 100, title: 'Export Video' },
   ]);
 
@@ -546,7 +551,7 @@ function App() {
       dockSide: undefined
     })));
     setSidebarWidth(320);
-    setInspectorWidth(320);
+    setRightSidebarWidth(320);
   };
 
   const handleDock = (id: string, side: 'left' | 'right' | 'top' | 'bottom' | 'center') => {
@@ -594,7 +599,7 @@ function App() {
 
   const renderPanelContent = (panel: PanelState) => {
     switch (panel.type) {
-      case 'media': return <MediaPanel assets={assets} onAddAsset={handleAddAsset} onDragStart={handleDragStart} />;
+      case 'media': return <MediaPanel assets={assets} onAddAsset={handleAddAsset} onUpdateAsset={handleUpdateAsset} onDragStart={handleDragStart} />;
       case 'audio': return <AudioPanel onAddAsset={handleAddAsset} />;
       case 'text': return <TextPanel assets={assets} onDragStart={handleDragStart} />;
       case 'shapes': return <ShapesPanel onDragStart={handleDragStart} />;
@@ -614,8 +619,9 @@ function App() {
         />
       );
       case 'ai': return <AIPanel onAddAsset={handleAddAsset} />;
+      case 'script': return <ScriptPanel tracks={tracks} clips={clips} assets={assets} onApplyScript={updateClips} />;
       case 'preview': return (
-        <div className="flex-1 flex items-center justify-center p-8 overflow-hidden bg-black h-full w-full">
+        <div className="flex-1 flex items-center justify-center overflow-hidden bg-black h-full w-full">
           <Player
             clips={clips}
             assets={assets}
@@ -668,11 +674,16 @@ function App() {
       {/* HEADER */}
       <header className="h-12 border-b border-[var(--border-base)] flex items-center justify-between px-4 bg-[var(--bg-header)] z-50 shrink-0">
         <div className="flex items-center gap-6">
+          {/* NAME  */}
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-br from-[var(--accent-primary)] to-indigo-600 rounded-lg shadow-lg shadow-blue-500/10 flex items-center justify-center font-bold text-white text-sm">L</div>
             <h1 className="font-semibold text-sm tracking-tight text-gray-200">Lumina Editor</h1>
           </div>
+
+          {/* SEPARATOR */}
           <div className="h-4 w-px bg-white/10 mx-2"></div>
+
+          {/* TOOLS */}
           <div className="flex items-center gap-1">
             <div className="flex bg-[var(--bg-item)] rounded-md p-0.5 border border-[var(--border-light)] gap-0.5">
               <button onClick={undo} disabled={historyIndex <= 0} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all"><Undo2 size={13} /></button>
@@ -680,6 +691,13 @@ function App() {
             </div>
           </div>
         </div>
+
+        {/* RIBBON */}
+        <Ribbon
+          onTogglePanel={togglePanel}
+          activePanels={panels.filter(p => p.isOpen).map(p => p.id)}
+          onResetLayout={resetLayout}
+        />
 
         <div className="flex items-center gap-3">
           {/* Resolution Controls */}
@@ -694,11 +712,11 @@ function App() {
                 setCanvasHeight(h);
               }}
             >
-              <option value="1920x1080">1080p (16:9)</option>
-              <option value="1280x720">720p (16:9)</option>
-              <option value="1080x1920">Mobile (9:16)</option>
-              <option value="1080x1080">Square (1:1)</option>
-              <option value="1080x1350">Portrait (4:5)</option>
+              <option value="1920x1080" className="bg-[#18181b] text-gray-300">1080p (16:9)</option>
+              <option value="1280x720" className="bg-[#18181b] text-gray-300">720p (16:9)</option>
+              <option value="1080x1920" className="bg-[#18181b] text-gray-300">Mobile (9:16)</option>
+              <option value="1080x1080" className="bg-[#18181b] text-gray-300">Square (1:1)</option>
+              <option value="1080x1350" className="bg-[#18181b] text-gray-300">Portrait (4:5)</option>
             </select>
           </div>
 
@@ -719,11 +737,7 @@ function App() {
         </div>
       </header>
 
-      <Ribbon
-        onTogglePanel={togglePanel}
-        activePanels={panels.filter(p => p.isOpen).map(p => p.id)}
-        onResetLayout={resetLayout}
-      />
+
 
 
       {/* WORKSPACE AREA */}

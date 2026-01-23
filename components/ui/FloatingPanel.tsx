@@ -86,7 +86,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
             }}
             onMouseDown={onFocus}
             className={`flex flex-col bg-[#18181b]/95 backdrop-blur-md border border-[#27272a] rounded-lg shadow-2xl overflow-hidden`}
-            style={{ zIndex }}
+            style={{ zIndex, display: 'flex' }}
             dragHandleClassName="panel-header"
             bounds="window"
             minWidth={200}
@@ -147,7 +147,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-hidden relative">
+            <div className="flex-1 overflow-hidden relative min-h-0">
                 {children}
             </div>
         </Rnd>

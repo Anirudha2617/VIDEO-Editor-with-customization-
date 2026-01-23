@@ -24,7 +24,17 @@ export const useKeyboardShortcuts = (
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isEnabled) return;
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName) || (e.target as HTMLElement).isContentEditable) return;
+
+      const target = e.target as HTMLElement;
+
+      // Skip shortcuts if typing in inputs, textareas, or content editable elements
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (target.isContentEditable) return;
+
+      // Skip if inside Monaco editor or any code editor
+      if (target.closest('.monaco-editor')) return;
+      if (target.closest('[data-script-editor]')) return;
+      if (target.getAttribute('role') === 'textbox') return;
 
       const isCtrl = e.ctrlKey || e.metaKey;
 

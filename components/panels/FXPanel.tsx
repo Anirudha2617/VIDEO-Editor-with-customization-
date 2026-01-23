@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AnimationType, EasingType, Effect } from '../../types';
-import { Wand2, Plus, Move, Play, Code, Sparkles } from 'lucide-react';
-import { validateTransitionCode, registerTransition, getTransition, getAllTransitions, subscribeToRegistry } from '../../transitions/registry';
+import { Wand2, Move, Sparkles } from 'lucide-react';
+import { getAllTransitions, subscribeToRegistry } from '../../transitions/registry';
 
 interface FXPanelProps {
     onDragStart: (e: React.DragEvent, item: any, type: string) => void;
@@ -40,9 +40,9 @@ const FXPanel: React.FC<FXPanelProps> = ({ onDragStart }) => {
         { id: 'fx_vintage', name: 'Vintage', type: 'filter', value: 'sepia(50%) contrast(120%) saturate(80%)', kind: 'custom', param: 100 },
     ]);
 
-    const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
-    const [customName, setCustomName] = useState('');
-    const [customCode, setCustomCode] = useState(`// Custom Transition...`); // (Shortened for brevity)
+    // const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+    // const [customName, setCustomName] = useState('');
+    // const [customCode, setCustomCode] = useState(\`// Custom Transition...\`);
 
     // ... (Transition creation logic would go here - simplifying for now)
 

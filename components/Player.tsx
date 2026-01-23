@@ -17,7 +17,6 @@ interface PlayerProps {
   exportSettings?: ExportSettings;
   onExportFinish?: () => void;
   onExportProgress?: (progress: number) => void;
-  onExportProgress?: (progress: number) => void;
   width?: number;
   height?: number;
   selectedClipId?: string | null;

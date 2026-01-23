@@ -12,6 +12,7 @@ export enum MediaType {
 export interface Asset {
   id: string;
   type: MediaType;
+  subtype?: 'transition' | 'animation' | 'filter';
   src: string;
   name: string;
   thumbnail?: string; // For videos

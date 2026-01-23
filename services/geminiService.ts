@@ -255,3 +255,30 @@ export const generateTTSAsset = async (text: string, voice: string): Promise<str
   // Mock: Return a generic voiceover sample
   return "https://cdn.pixabay.com/audio/2022/10/16/audio_1808fbf07a.mp3";
 }
+
+/**
+ * Generates a code snippet based on a prompt and language.
+ */
+export const generateCodeSnippet = async (prompt: string, language: string): Promise<string> => {
+  try {
+    const ai = createClient();
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: {
+        parts: [{
+          text: `Write ${language} code for the following request: "${prompt}".
+            Return ONLY the raw code string, nothing else. Do not use Markdown backticks.
+            Do not include explanations.` }]
+      }
+    });
+
+    let text = response.text || "";
+    // Clean up potential markdown formatting if the model disobeys
+    text = text.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
+    return text;
+  } catch (error) {
+    console.error("Code generation failed:", error);
+    // Fallback
+    return `/* AI Generation Failed */\n/* Request: ${prompt} */\n/* Please check your API key and connection. */`;
+  }
+}
