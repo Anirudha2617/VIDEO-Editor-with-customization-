@@ -1,36 +1,36 @@
 export interface CodeTemplate {
-    name: string;
-    category: 'backgrounds' | 'animations' | 'text' | 'shapes' | 'effects';
-    description: string;
-    html: string;
-    css: string;
-    js: string;
-    type: 'image' | 'video' | 'text';
-    thumbnail?: string;
+  name: string;
+  category: 'backgrounds' | 'animations' | 'text' | 'shapes' | 'effects';
+  description: string;
+  html: string;
+  css: string;
+  js: string;
+  type: 'image' | 'video' | 'text';
+  thumbnail?: string;
 }
 
 export const codeTemplates: CodeTemplate[] = [
-    // BACKGROUNDS
-    {
-        name: 'Gradient Background',
-        category: 'backgrounds',
-        description: 'Simple linear gradient',
-        type: 'image',
-        html: '<div class="gradient"></div>',
-        css: `.gradient {
+  // BACKGROUNDS
+  {
+    name: 'Gradient Background',
+    category: 'backgrounds',
+    description: 'Simple linear gradient',
+    type: 'image',
+    html: '<div class="gradient"></div>',
+    css: `.gradient {
   width: 100%;
   height: 100%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }`,
-        js: ''
-    },
-    {
-        name: 'Animated Gradient',
-        category: 'backgrounds',
-        description: 'Flowing gradient animation',
-        type: 'video',
-        html: '<div class="animated-gradient"></div>',
-        css: `.animated-gradient {
+    js: ''
+  },
+  {
+    name: 'Animated Gradient',
+    category: 'backgrounds',
+    description: 'Flowing gradient animation',
+    type: 'video',
+    html: '<div class="animated-gradient"></div>',
+    css: `.animated-gradient {
   width: 100%;
   height: 100%;
   background: linear-gradient(45deg, #ff0080, #7928ca, #ff0080);
@@ -42,17 +42,17 @@ export const codeTemplates: CodeTemplate[] = [
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }`,
-        js: ''
-    },
+    js: ''
+  },
 
-    // TEXT EFFECTS
-    {
-        name: 'Neon Text',
-        category: 'text',
-        description: 'Glowing neon text effect',
-        type: 'text',
-        html: '<h1 class="neon">NEON</h1>',
-        css: `.neon {
+  // TEXT EFFECTS
+  {
+    name: 'Neon Text',
+    category: 'text',
+    description: 'Glowing neon text effect',
+    type: 'text',
+    html: '<h1 class="neon">NEON</h1>',
+    css: `.neon {
   font-family: 'Arial Black', sans-serif;
   font-size: 80px;
   font-weight: bold;
@@ -66,15 +66,15 @@ export const codeTemplates: CodeTemplate[] = [
   margin: 0;
   padding: 20px;
 }`,
-        js: ''
-    },
-    {
-        name: 'Glitch Text',
-        category: 'text',
-        description: 'Animated glitch effect',
-        type: 'video',
-        html: '<h1 class="glitch" data-text="GLITCH">GLITCH</h1>',
-        css: `.glitch {
+    js: ''
+  },
+  {
+    name: 'Glitch Text',
+    category: 'text',
+    description: 'Animated glitch effect',
+    type: 'video',
+    html: '<h1 class="glitch" data-text="GLITCH">GLITCH</h1>',
+    css: `.glitch {
   font-family: 'Arial Black', sans-serif;
   font-size: 72px;
   font-weight: bold;
@@ -93,15 +93,15 @@ export const codeTemplates: CodeTemplate[] = [
   60% { transform: translate(-2px, -2px); }
   80% { transform: translate(2px, 2px); }
 }`,
-        js: ''
-    },
-    {
-        name: 'Typewriter Text',
-        category: 'text',
-        description: 'Typing animation effect',
-        type: 'video',
-        html: '<h1 class="typewriter">Hello World!</h1>',
-        css: `.typewriter {
+    js: ''
+  },
+  {
+    name: 'Typewriter Text',
+    category: 'text',
+    description: 'Typing animation effect',
+    type: 'video',
+    html: '<h1 class="typewriter">Hello World!</h1>',
+    css: `.typewriter {
   font-family: 'Courier New', monospace;
   font-size: 48px;
   color: #00ff00;
@@ -121,17 +121,17 @@ export const codeTemplates: CodeTemplate[] = [
 @keyframes blink {
   50% { border-color: transparent; }
 }`,
-        js: ''
-    },
+    js: ''
+  },
 
-    // ANIMATIONS
-    {
-        name: 'Particle System',
-        category: 'animations',
-        description: 'Floating particles animation',
-        type: 'video',
-        html: '<canvas id="canvas"></canvas>',
-        css: `body, html { 
+  // ANIMATIONS
+  {
+    name: 'Particle System',
+    category: 'animations',
+    description: 'Floating particles animation',
+    type: 'video',
+    html: '<canvas id="canvas"></canvas>',
+    css: `body, html { 
   margin: 0; 
   padding: 0; 
   overflow: hidden; 
@@ -142,7 +142,7 @@ export const codeTemplates: CodeTemplate[] = [
   width: 100%;
   height: 100%;
 }`,
-        js: `const canvas = document.getElementById('canvas');
+    js: `const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth || 800;
 canvas.height = window.innerHeight || 600;
@@ -177,13 +177,13 @@ function animate() {
   requestAnimationFrame(animate);
 }
 animate();`
-    },
-    {
-        name: 'Spinning Cube',
-        category: 'animations',
-        description: '3D CSS cube rotation',
-        type: 'video',
-        html: `<div class="scene">
+  },
+  {
+    name: 'Spinning Cube',
+    category: 'animations',
+    description: '3D CSS cube rotation',
+    type: 'video',
+    html: `<div class="scene">
   <div class="cube">
     <div class="face front"></div>
     <div class="face back"></div>
@@ -193,7 +193,7 @@ animate();`
     <div class="face bottom"></div>
   </div>
 </div>`,
-        css: `.scene {
+    css: `.scene {
   width: 200px;
   height: 200px;
   perspective: 600px;
@@ -227,29 +227,29 @@ animate();`
 .left   { background: #ff8000; transform: rotateY(-90deg) translateZ(100px); }
 .top    { background: #8000ff; transform: rotateX(90deg) translateZ(100px); }
 .bottom { background: #ffff00; transform: rotateX(-90deg) translateZ(100px); }`,
-        js: ''
-    },
+    js: ''
+  },
 
-    // SHAPES
-    {
-        name: 'Circle Pattern',
-        category: 'shapes',
-        description: 'Geometric circle pattern',
-        type: 'image',
-        html: '<svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="none" stroke="#00ffff" stroke-width="2"/><circle cx="100" cy="100" r="60" fill="none" stroke="#ff00ff" stroke-width="2"/><circle cx="100" cy="100" r="40" fill="none" stroke="#ffff00" stroke-width="2"/></svg>',
-        css: `svg {
+  // SHAPES
+  {
+    name: 'Circle Pattern',
+    category: 'shapes',
+    description: 'Geometric circle pattern',
+    type: 'image',
+    html: '<svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="none" stroke="#00ffff" stroke-width="2"/><circle cx="100" cy="100" r="60" fill="none" stroke="#ff00ff" stroke-width="2"/><circle cx="100" cy="100" r="40" fill="none" stroke="#ffff00" stroke-width="2"/></svg>',
+    css: `svg {
   width: 100%;
   height: 100%;
 }`,
-        js: ''
-    },
-    {
-        name: 'Pulsing Circle',
-        category: 'shapes',
-        description: 'Animated pulsing circle',
-        type: 'video',
-        html: '<div class="pulse"></div>',
-        css: `.pulse {
+    js: ''
+  },
+  {
+    name: 'Pulsing Circle',
+    category: 'shapes',
+    description: 'Animated pulsing circle',
+    type: 'video',
+    html: '<div class="pulse"></div>',
+    css: `.pulse {
   width: 200px;
   height: 200px;
   margin: 100px auto;
@@ -262,17 +262,17 @@ animate();`
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.2); opacity: 0.7; }
 }`,
-        js: ''
-    },
+    js: ''
+  },
 
-    // EFFECTS
-    {
-        name: 'Matrix Rain',
-        category: 'effects',
-        description: 'Matrix-style falling characters',
-        type: 'video',
-        html: '<canvas id="matrix"></canvas>',
-        css: `body, html { 
+  // EFFECTS
+  {
+    name: 'Matrix Rain',
+    category: 'effects',
+    description: 'Matrix-style falling characters',
+    type: 'video',
+    html: '<canvas id="matrix"></canvas>',
+    css: `body, html { 
   margin: 0; 
   padding: 0; 
   overflow: hidden; 
@@ -281,7 +281,7 @@ animate();`
 #matrix { 
   display: block; 
 }`,
-        js: `const canvas = document.getElementById('matrix');
+    js: `const canvas = document.getElementById('matrix');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth || 800;
 canvas.height = window.innerHeight || 600;
@@ -310,14 +310,14 @@ function draw() {
 }
 
 setInterval(draw, 33);`
-    },
-    {
-        name: 'Starfield',
-        category: 'effects',
-        description: 'Moving starfield effect',
-        type: 'video',
-        html: '<canvas id="stars"></canvas>',
-        css: `body, html { 
+  },
+  {
+    name: 'Starfield',
+    category: 'effects',
+    description: 'Moving starfield effect',
+    type: 'video',
+    html: '<canvas id="stars"></canvas>',
+    css: `body, html { 
   margin: 0; 
   padding: 0; 
   overflow: hidden; 
@@ -326,7 +326,7 @@ setInterval(draw, 33);`
 #stars { 
   display: block; 
 }`,
-        js: `const canvas = document.getElementById('stars');
+    js: `const canvas = document.getElementById('stars');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth || 800;
 canvas.height = window.innerHeight || 600;
@@ -362,14 +362,89 @@ function animate() {
   requestAnimationFrame(animate);
 }
 animate();`
+  },
+  // TRANSITIONS
+  {
+    name: 'Ripple Dissolve',
+    category: 'effects',
+    description: 'Water ripple transition overlay',
+    type: 'video',
+    html: '<canvas id="ripple"></canvas>',
+    css: `body, html {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+}
+#ripple {
+  display: block;
+  width: 100%;
+  height: 100%;
+}`,
+    js: `const canvas = document.getElementById('ripple');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth || 1920;
+canvas.height = window.innerHeight || 1080;
+
+const ripples = [];
+const maxRipples = 5;
+const duration = 2000; // ms
+const startTime = Date.now();
+
+// Create ripples
+for(let i=0; i<maxRipples; i++) {
+  ripples.push({
+    x: canvas.width / 2,
+    y: canvas.height / 2,
+    radius: 0,
+    maxRadius: canvas.width * 1.5,
+    speed: 10 + Math.random() * 5,
+    delay: i * 200,
+    alpha: 1,
+    color: '#00ccff'
+  });
+}
+
+function animate() {
+  const elapsed = Date.now() - startTime;
+  
+  // Clear with fade
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw ripples
+  ripples.forEach(r => {
+    if (elapsed > r.delay) {
+        r.radius += r.speed;
+        const progress = Math.min(1, r.radius / r.maxRadius);
+        r.alpha = 1 - progress;
+        
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+        const gradient = ctx.createRadialGradient(r.x, r.y, r.radius * 0.8, r.x, r.y, r.radius);
+        gradient.addColorStop(0, \`rgba(0, 204, 255, 0)\`);
+        gradient.addColorStop(1, \`rgba(0, 204, 255, \${r.alpha * 0.5})\`);
+        
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        
+        ctx.lineWidth = 10;
+        ctx.strokeStyle = \`rgba(255, 255, 255, \${r.alpha})\`;
+        ctx.stroke();
     }
+  });
+
+  requestAnimationFrame(animate);
+}
+
+animate();`
+  }
 ];
 
 export function getTemplatesByCategory(category: string): CodeTemplate[] {
-    if (category === 'all') return codeTemplates;
-    return codeTemplates.filter(t => t.category === category);
+  if (category === 'all') return codeTemplates;
+  return codeTemplates.filter(t => t.category === category);
 }
 
 export function getTemplateByName(name: string): CodeTemplate | undefined {
-    return codeTemplates.find(t => t.name === name);
+  return codeTemplates.find(t => t.name === name);
 }

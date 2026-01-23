@@ -10,6 +10,7 @@ export interface CodeAsset {
     width: number;
     height: number;
     type: 'image' | 'video' | 'text';
+    subtype?: 'transition' | 'animation' | 'filter';
     duration?: number;
     fps?: number;
     thumbnail?: string;
@@ -204,7 +205,7 @@ export async function renderCodeToVideo(
 
         const recorder = new MediaRecorder(stream, {
             mimeType,
-            videoBitsPerSecond: 8000000,
+            videoBitsPerSecond: 25000000,
         });
 
         const chunks: Blob[] = [];
@@ -405,11 +406,13 @@ export function createTextClipFromCode(code: CodeAsset): Partial<Clip> {
 export function createAssetFromCode(
     code: CodeAsset,
     src: string,
-    type: MediaType
+    type: MediaType,
+    subtype?: Asset['subtype']
 ): Asset {
     return {
         id: code.id,
         type,
+        subtype,
         src,
         name: code.name,
         thumbnail: code.thumbnail,

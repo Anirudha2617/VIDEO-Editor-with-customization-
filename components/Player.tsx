@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Clip, MediaType, Asset, ExportSettings } from '../types';
 import { Play, Pause, SkipBack, SkipForward, Maximize, Minimize } from 'lucide-react';
 import { renderCanvas } from '../utils/renderer';
+import TransformOverlay from './TransformOverlay';
 
 interface PlayerProps {
   clips: Clip[];
@@ -16,12 +17,15 @@ interface PlayerProps {
   exportSettings?: ExportSettings;
   onExportFinish?: () => void;
   onExportProgress?: (progress: number) => void;
+  onExportProgress?: (progress: number) => void;
   width?: number;
   height?: number;
+  selectedClipId?: string | null;
+  onClipUpdate?: (id: string, updates: Partial<Clip>) => void;
 }
 
 const Player: React.FC<PlayerProps> = ({
-  clips, assets, currentTime, isPlaying, onTogglePlay, onSeek, duration, exportStatus, exportSettings, onExportFinish, onExportProgress, width = 1280, height = 720
+  clips, assets, currentTime, isPlaying, onTogglePlay, onSeek, duration, exportStatus, exportSettings, onExportFinish, onExportProgress, width = 1280, height = 720, selectedClipId, onClipUpdate
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mediaCache = useRef<Map<string, HTMLImageElement | HTMLVideoElement>>(new Map());
@@ -175,22 +179,41 @@ const Player: React.FC<PlayerProps> = ({
       console.log('📹 Export filename:', filename);
 
       // Try different codecs for better compatibility
-      let options: MediaRecorderOptions = {
-        videoBitsPerSecond: exportSettings.quality === 'high' ? 25000000 : (exportSettings.quality === 'medium' ? 8000000 : 2500000), // Increased quality significantly
-        audioBitsPerSecond: 320000 // Increased audio quality
-      };
+      // MimeType Selection based on format
+      let mimeType = 'video/webm;codecs=vp9,opus'; // Default
 
-      // Try vp9 with opus first, fall back to vp8
-      if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-        options.mimeType = 'video/webm;codecs=vp9,opus';
-        console.log('✅ Using VP9 codec');
-      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-        options.mimeType = 'video/webm;codecs=vp8,opus';
-        console.log('✅ Using VP8 codec');
-      } else if (MediaRecorder.isTypeSupported('video/webm')) {
-        options.mimeType = 'video/webm';
-        console.log('⚠️ Using basic WebM codec');
+      if (exportSettings.format === 'mp4') {
+        // Try MP4 MIME types
+        if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')) {
+          mimeType = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+          console.log('✅ Using MP4 (H.264/AAC)');
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+          mimeType = 'video/mp4';
+          console.log('✅ Using MP4 (Generic)');
+        } else {
+          console.warn('⚠️ MP4 not supported by this browser. Falling back to WebM.');
+          // Fallback handled below
+        }
       }
+
+      if (exportSettings.format === 'webm' || !mimeType.includes('mp4')) {
+        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+          mimeType = 'video/webm;codecs=vp9,opus';
+          console.log('✅ Using VP9 codec');
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+          mimeType = 'video/webm;codecs=vp8,opus';
+          console.log('✅ Using VP8 codec');
+        } else {
+          mimeType = 'video/webm';
+          console.log('⚠️ Using basic WebM codec');
+        }
+      }
+
+      const options: MediaRecorderOptions = {
+        mimeType,
+        videoBitsPerSecond: exportSettings.quality === 'high' ? 25000000 : (exportSettings.quality === 'medium' ? 8000000 : 2500000),
+        audioBitsPerSecond: 320000
+      };
 
       console.log('📹 MediaRecorder options:', options);
       try {
@@ -219,13 +242,16 @@ const Player: React.FC<PlayerProps> = ({
 
           if (recordedChunksRef.current.length > 0) {
             try {
-              const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+              const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+              const fileType = mimeType.includes('mp4') ? 'video/mp4' : 'video/webm';
+
+              const blob = new Blob(recordedChunksRef.current, { type: fileType });
               console.log('Blob created, size:', blob.size);
 
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `${filename}.webm`;
+              a.download = `${filename}.${extension}`;
               document.body.appendChild(a);
               console.log('Triggering download:', a.download);
               a.click();
@@ -433,7 +459,22 @@ const Player: React.FC<PlayerProps> = ({
           className={`relative shadow-2xl overflow-hidden ring-1 ring-[#27272a] bg-black group ${isFullscreen ? 'w-full h-full ring-0' : 'h-full max-w-full'}`}
           style={{ aspectRatio: isFullscreen ? 'auto' : `${width}/${height}` }}
         >
+
           <canvas ref={canvasRef} className="w-full h-full object-contain" />
+
+          {/* Interactive Overlay */}
+          {isReady && selectedClipId && onClipUpdate && exportStatus === 'idle' && (
+            <TransformOverlay
+              activeClip={clips.find(c => c.id === selectedClipId) || null}
+              onChange={(updates) => onClipUpdate(selectedClipId, updates)}
+              containerWidth={containerRef.current?.getBoundingClientRect().width || width}
+              containerHeight={containerRef.current?.getBoundingClientRect().height || height}
+              canvasWidth={width}
+              canvasHeight={height}
+              currentTime={currentTime}
+            />
+          )}
+
           {!isReady && <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white z-50">Loading...</div>}
           <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-6">
             <button onClick={() => onSeek(0)} className="text-white hover:scale-110"><SkipBack size={24} /></button>

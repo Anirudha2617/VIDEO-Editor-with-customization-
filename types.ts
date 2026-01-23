@@ -70,6 +70,8 @@ export interface Clip {
   // Visual properties
   x?: number;
   y?: number;
+  width?: number; // Base width of the asset
+  height?: number; // Base height of the asset
   scale?: number;
   rotation?: number;
   opacity?: number;
@@ -161,6 +163,7 @@ export interface ExportSettings {
   startTime: number;
   endTime: number;
   fps?: number; // Frames per second for export
+  format?: 'webm' | 'mp4' | 'json'; // Export format
 }
 
 export interface CustomFont {

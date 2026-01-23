@@ -2,11 +2,19 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Timeline from './components/Timeline';
 import Player from './components/Player';
-import AssetLibrary from './components/AssetLibrary';
 import PropertiesPanel from './components/PropertiesPanel';
 import ExportPanel from './components/ExportPanel';
+import { Ribbon } from './components/Ribbon';
+import { FloatingPanel } from './components/ui/FloatingPanel';
+import MediaPanel from './components/panels/MediaPanel';
+import AudioPanel from './components/panels/AudioPanel';
+import FXPanel from './components/panels/FXPanel';
+import CodePanel from './components/panels/CodePanel';
+import AIPanel from './components/panels/AIPanel';
+import ShapesPanel from './components/panels/ShapesPanel';
+import TextPanel from './components/panels/TextPanel';
 import { Asset, Clip, MediaType, Track, ExportSettings, Effect, AnimationType, Project, CustomFont } from './types';
-import { Download, Share2, Loader2, CheckCircle2, Undo2, Redo2, Copy, ClipboardPaste, Save, Upload } from 'lucide-react';
+import { Download, Share2, Loader2, CheckCircle2, Undo2, Redo2, Copy, ClipboardPaste, Save, Upload, X } from 'lucide-react';
 import { useEditorHistory } from './hooks/useEditorHistory';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAutosave } from './hooks/useAutosave';
@@ -39,10 +47,9 @@ function App() {
   const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
   const [projectName, setProjectName] = useState('Untitled Project');
 
-  const [showExportPanel, setShowExportPanel] = useState(false);
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'completed' | 'cancelled'>('idle');
   const [exportProgress, setExportProgress] = useState(0);
-  const [exportSettings, setExportSettings] = useState<ExportSettings>({ resolution: '1080p', quality: 'high', filename: 'video', startTime: 0, endTime: 0, fps: 30 });
+  const [exportSettings, setExportSettings] = useState<ExportSettings>({ resolution: '1080p', quality: 'high', filename: 'video', startTime: 0, endTime: 0, fps: 30, format: 'webm' });
 
   // Autosave integration
   const { saveStatus, lastSaved, manualSave } = useAutosave({
@@ -330,6 +337,42 @@ function App() {
   };
 
   const startExport = () => {
+    if (exportSettings.format === 'json') {
+      const project: Project = {
+        id: crypto.randomUUID(),
+        name: exportSettings.filename || 'Project',
+        version: '1.0.0',
+        lastModified: Date.now(),
+        state: {
+          tracks,
+          clips,
+          assets,
+          duration,
+          exportSettings,
+          canvasWidth,
+          canvasHeight,
+          customFonts
+        }
+      };
+
+      const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${exportSettings.filename || 'project'}.lumina`;
+      document.body.appendChild(a);
+      a.click();
+
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+
+      setExportStatus('completed');
+      updatePanel('export', { isOpen: false });
+      return;
+    }
+
     setExportStatus('exporting');
     setExportProgress(0);
     setCurrentTime(exportSettings.startTime);
@@ -339,6 +382,7 @@ function App() {
   const cancelExport = () => {
     setExportStatus('cancelled');
     setIsPlaying(false);
+    updatePanel('export', { isOpen: false });
   };
 
   const selectedClips = clips.filter(c => selectedClipIds.includes(c.id));
@@ -440,135 +484,475 @@ function App() {
     e.target.value = '';
   };
 
+
+  // Window Manager State
+  interface PanelState {
+    id: string;
+    type: 'media' | 'audio' | 'text' | 'shapes' | 'fx' | 'code' | 'ai' | 'preview' | 'timeline' | 'export';
+    isOpen: boolean;
+    position: { x: number; y: number };
+    size: { width: string | number; height: string | number };
+    zIndex: number;
+    title: string;
+    isDocked?: boolean;
+    dockSide?: 'left' | 'right' | 'top' | 'bottom' | 'center';
+  }
+
+  const [panels, setPanels] = useState<PanelState[]>([
+    { id: 'preview', type: 'preview', isOpen: true, position: { x: 400, y: 50 }, size: { width: 800, height: 450 }, zIndex: 20, title: 'Preview Monitor', isDocked: true, dockSide: 'center' },
+    { id: 'timeline', type: 'timeline', isOpen: true, position: { x: 50, y: 500 }, size: { width: 1000, height: 300 }, zIndex: 15, title: 'Timeline', isDocked: true, dockSide: 'bottom' },
+    { id: 'media', type: 'media', isOpen: true, position: { x: 20, y: 80 }, size: { width: 300, height: 450 }, zIndex: 10, title: 'Media Library', isDocked: true, dockSide: 'left' },
+    { id: 'audio', type: 'audio', isOpen: false, position: { x: 50, y: 100 }, size: { width: 300, height: 400 }, zIndex: 9, title: 'Audio Browser' },
+    { id: 'text', type: 'text', isOpen: false, position: { x: 80, y: 120 }, size: { width: 280, height: 400 }, zIndex: 8, title: 'Text Assets' },
+    { id: 'shapes', type: 'shapes', isOpen: false, position: { x: 110, y: 140 }, size: { width: 250, height: 350 }, zIndex: 7, title: 'Shapes' },
+    { id: 'fx', type: 'fx', isOpen: false, position: { x: 140, y: 160 }, size: { width: 300, height: 500 }, zIndex: 6, title: 'Effects & Transitions' },
+    { id: 'code', type: 'code', isOpen: false, position: { x: 170, y: 180 }, size: { width: 400, height: 500 }, zIndex: 5, title: 'Code Editor' },
+    { id: 'ai', type: 'ai', isOpen: false, position: { x: 200, y: 200 }, size: { width: 350, height: 600 }, zIndex: 4, title: 'AI Generator' },
+    { id: 'export', type: 'export', isOpen: false, position: { x: 300, y: 100 }, size: { width: 300, height: 620 }, zIndex: 100, title: 'Export Video' },
+  ]);
+
+  const [maxZIndex, setMaxZIndex] = useState(100);
+
+  const togglePanel = (id: string) => {
+    setPanels(prev => prev.map(p => {
+      if (p.id === id) {
+        return { ...p, isOpen: !p.isOpen, zIndex: !p.isOpen ? maxZIndex + 1 : p.zIndex };
+      }
+      return p;
+    }));
+    if (!panels.find(p => p.id === id)?.isOpen) {
+      setMaxZIndex(prev => prev + 1);
+    }
+  };
+
+  const updatePanel = (id: string, data: Partial<PanelState>) => {
+    setPanels(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
+  };
+
+  const focusPanel = (id: string) => {
+    setPanels(prev => prev.map(p => p.id === id ? { ...p, zIndex: maxZIndex + 1 } : p));
+    setMaxZIndex(prev => prev + 1);
+  };
+
+
+  const resetLayout = () => {
+    setPanels(prev => prev.map((p, idx) => ({
+      ...p,
+      isOpen: idx === 0, // Only open media
+      position: { x: 20 + (idx * 20), y: 80 + (idx * 20) },
+      size: { width: 320, height: 500 },
+      zIndex: 10 + idx,
+      isDocked: false,
+      dockSide: undefined
+    })));
+    setSidebarWidth(320);
+    setInspectorWidth(320);
+  };
+
+  const handleDock = (id: string, side: 'left' | 'right' | 'top' | 'bottom' | 'center') => {
+    setPanels(prev => prev.map(p => p.id === id ? { ...p, isDocked: true, dockSide: side } : p));
+  };
+
+  const handleUndock = (id: string) => {
+    setPanels(prev => prev.map(p => p.id === id ? { ...p, isDocked: false, dockSide: undefined } : p));
+  };
+
+  // Resizable state
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
+  const [bottomHeight, setBottomHeight] = useState(300);
+  const [topHeight, setTopHeight] = useState(250);
+  const [isResizing, setIsResizing] = useState<'sidebar' | 'rightSidebar' | 'bottom' | 'top' | null>(null);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      e.preventDefault();
+
+      if (isResizing === 'sidebar') {
+        setSidebarWidth(Math.max(200, Math.min(600, e.clientX)));
+      } else if (isResizing === 'rightSidebar') {
+        setRightSidebarWidth(Math.max(200, Math.min(600, window.innerWidth - e.clientX)));
+      } else if (isResizing === 'bottom') {
+        setBottomHeight(Math.max(150, Math.min(window.innerHeight - 300, window.innerHeight - e.clientY)));
+      } else if (isResizing === 'top') {
+        setTopHeight(Math.max(150, Math.min(600, e.clientY - 100))); // approx header offset
+      }
+    };
+
+    const handleMouseUp = () => setIsResizing(null);
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
+  const renderPanelContent = (panel: PanelState) => {
+    switch (panel.type) {
+      case 'media': return <MediaPanel assets={assets} onAddAsset={handleAddAsset} onDragStart={handleDragStart} />;
+      case 'audio': return <AudioPanel onAddAsset={handleAddAsset} />;
+      case 'text': return <TextPanel assets={assets} onDragStart={handleDragStart} />;
+      case 'shapes': return <ShapesPanel onDragStart={handleDragStart} />;
+      case 'fx': return <FXPanel onDragStart={handleDragStart} />;
+      case 'code': return <CodePanel onAddAsset={handleAddAsset} assets={assets} />;
+      case 'export': return (
+        <ExportPanel
+          settings={exportSettings}
+          onUpdateSettings={setExportSettings}
+          onStartExport={startExport}
+          onCancelExport={cancelExport}
+          isExporting={exportStatus === 'exporting'}
+          progress={exportProgress}
+          currentTime={currentTime}
+          status={exportStatus}
+          maxDuration={duration}
+        />
+      );
+      case 'ai': return <AIPanel onAddAsset={handleAddAsset} />;
+      case 'preview': return (
+        <div className="flex-1 flex items-center justify-center p-8 overflow-hidden bg-black h-full w-full">
+          <Player
+            clips={clips}
+            assets={assets}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            onTogglePlay={() => setIsPlaying(!isPlaying)}
+            onSeek={setCurrentTime}
+            duration={duration}
+            exportStatus={exportStatus}
+            exportSettings={exportSettings}
+            onExportFinish={() => { setExportStatus('completed'); setIsPlaying(false); }}
+            onExportProgress={setExportProgress}
+            width={canvasWidth}
+            height={canvasHeight}
+            selectedClipId={selectedClipIds[0] || null}
+            onClipUpdate={handleClipUpdate}
+          />
+        </div>
+      );
+      case 'timeline': return (
+        <Timeline
+          tracks={tracks}
+          clips={clips}
+          currentTime={currentTime}
+          duration={duration}
+          zoom={zoom}
+          onSeek={setCurrentTime}
+          onClipUpdate={handleClipUpdate}
+          selectedClipIds={selectedClipIds}
+          onSelectClip={(id, multi) => { if (multi) { if (selectedClipIds.includes(id)) setSelectedClipIds(prev => prev.filter(i => i !== id)); else setSelectedClipIds(prev => [...prev, id]); } else { setSelectedClipIds([id]); } }}
+          onClearSelection={() => setSelectedClipIds([])}
+          onDropAsset={handleDropAsset}
+          onCreateEffectClip={handleCreateEffectClip}
+          onCreateAnimationClip={handleCreateAnimationClip}
+          onSplitClip={handleSplitClip}
+          onDeleteClip={handleDeleteClip}
+          onZoomChange={setZoom}
+          onClipMove={(id, start, track) => { setClips(prev => prev.map(c => c.id === id ? { ...c, start, trackId: track } : c)); }}
+          onAddTrack={() => setTracks(prev => [...prev, { id: `t${prev.length + 1}`, type: MediaType.VIDEO, name: `Track ${prev.length + 1}` }])}
+          onDeleteTrack={(id) => setTracks(prev => prev.filter(t => t.id !== id))}
+        />
+      );
+      default: return null;
+    }
+  };
+
   return (
-    <div className="flex flex-col h-screen bg-[#000000] text-gray-200 font-sans selection:bg-blue-500/30">
-      <header className="h-14 border-b border-white/10 flex items-center justify-between px-4 bg-[#09090b]/80 backdrop-blur-xl z-50 sticky top-0">
+    <div className="flex flex-col h-screen overflow-hidden bg-[var(--bg-root)] text-[var(--text-primary)] font-sans">
+
+      {/* HEADER */}
+      <header className="h-12 border-b border-[var(--border-base)] flex items-center justify-between px-4 bg-[var(--bg-header)] z-50 shrink-0">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl shadow-lg shadow-purple-500/20 flex items-center justify-center font-bold text-white text-sm">L</div>
-            <h1 className="font-bold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">Lumina</h1>
+            <div className="w-8 h-8 bg-gradient-to-br from-[var(--accent-primary)] to-indigo-600 rounded-lg shadow-lg shadow-blue-500/10 flex items-center justify-center font-bold text-white text-sm">L</div>
+            <h1 className="font-semibold text-sm tracking-tight text-gray-200">Lumina Editor</h1>
           </div>
-          <div className="h-6 w-px bg-white/10 mx-2"></div>
-          <div className="flex items-center gap-2">
-            <div className="flex bg-[#18181b] rounded-lg p-1 border border-white/5 shadow-inner">
-              <button onClick={undo} disabled={historyIndex <= 0} className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white disabled:opacity-30 transition-all"><Undo2 size={14} /></button>
-              <button onClick={redo} disabled={historyIndex >= historyLength - 1} className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white disabled:opacity-30 transition-all"><Redo2 size={14} /></button>
-            </div>
-            <div className="flex bg-[#18181b] rounded-lg p-1 border border-white/5 shadow-inner">
-              <button onClick={handleCopy} className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-all"><Copy size={14} /></button>
-              <button onClick={handlePaste} className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-all"><ClipboardPaste size={14} /></button>
-            </div>
-
-            {/* Resolution Controls */}
-            <div className="flex items-center gap-2 ml-4 bg-[#18181b] p-1 rounded-lg border border-white/5 px-2">
-              <select
-                className="bg-transparent text-xs font-medium text-gray-300 outline-none border-none cursor-pointer hover:text-white transition-colors py-1"
-                value={`${canvasWidth}x${canvasHeight}`}
-                onChange={(e) => {
-                  const [w, h] = e.target.value.split('x').map(Number);
-                  setCanvasWidth(w);
-                  setCanvasHeight(h);
-                }}
-              >
-                <option value="1920x1080">16:9 • 1080p</option>
-                <option value="1280x720">16:9 • 720p</option>
-                <option value="1080x1920">9:16 • Mobile</option>
-                <option value="1080x1080">1:1 • Square</option>
-                <option value="1080x1350">4:5 • Portrait</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2 ml-2">
-              <button onClick={handleSaveProject} className="flex items-center gap-2 px-3 py-1.5 bg-[#18181b] hover:bg-[#27272a] hover:text-white text-gray-400 rounded-lg text-xs font-medium transition-all border border-white/5 hover:border-white/10">
-                <Save size={14} /> Save
-              </button>
-              <label className="flex items-center gap-2 px-3 py-1.5 bg-[#18181b] hover:bg-[#27272a] hover:text-white text-gray-400 rounded-lg text-xs font-medium transition-all border border-white/5 hover:border-white/10 cursor-pointer">
-                <Upload size={14} /> Load
-                <input type="file" accept=".lumina,.json" onChange={handleLoadProject} className="hidden" />
-              </label>
+          <div className="h-4 w-px bg-white/10 mx-2"></div>
+          <div className="flex items-center gap-1">
+            <div className="flex bg-[var(--bg-item)] rounded-md p-0.5 border border-[var(--border-light)] gap-0.5">
+              <button onClick={undo} disabled={historyIndex <= 0} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all"><Undo2 size={13} /></button>
+              <button onClick={redo} disabled={historyIndex >= historyLength - 1} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all"><Redo2 size={13} /></button>
             </div>
           </div>
         </div>
-        <button onClick={() => {
-          if (!showExportPanel) {
-            // Calculate actual end time from clips
-            const actualEndTime = clips.length > 0
-              ? Math.max(...clips.map(c => c.start + c.duration))
-              : duration;
-            // Ensure we have a valid end time (minimum 1 second)
-            const validEndTime = Math.max(actualEndTime, 1);
-            console.log('Export settings:', { startTime: 0, endTime: validEndTime, clips: clips.length });
-            setExportSettings(prev => ({ ...prev, startTime: 0, endTime: validEndTime }));
-          }
-          setShowExportPanel(!showExportPanel);
-        }} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all transform hover:scale-105 active:scale-95"><Download size={14} /> Export Video</button>
+
+        <div className="flex items-center gap-3">
+          {/* Resolution Controls */}
+          <div className="flex items-center gap-2 bg-[var(--bg-item)] p-0.5 rounded-md border border-[var(--border-light)] px-2">
+            <span className="text-[10px] text-gray-500 font-medium">CANVAS</span>
+            <select
+              className="bg-transparent text-xs font-medium text-gray-300 outline-none border-none cursor-pointer hover:text-white transition-colors py-1 w-24"
+              value={`${canvasWidth}x${canvasHeight}`}
+              onChange={(e) => {
+                const [w, h] = e.target.value.split('x').map(Number);
+                setCanvasWidth(w);
+                setCanvasHeight(h);
+              }}
+            >
+              <option value="1920x1080">1080p (16:9)</option>
+              <option value="1280x720">720p (16:9)</option>
+              <option value="1080x1920">Mobile (9:16)</option>
+              <option value="1080x1080">Square (1:1)</option>
+              <option value="1080x1350">Portrait (4:5)</option>
+            </select>
+          </div>
+
+          <div className="h-4 w-px bg-white/10"></div>
+
+          <div className="flex items-center gap-2">
+            <button onClick={handleSaveProject} className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-item)] hover:bg-[var(--bg-hover)] text-gray-300 hover:text-white rounded-md text-xs font-medium transition-all border border-[var(--border-light)]">
+              <Save size={13} /> Save Project
+            </button>
+            <button onClick={() => {
+              const actualEndTime = clips.length > 0 ? Math.max(...clips.map(c => c.start + c.duration)) : duration;
+              setExportSettings(prev => ({ ...prev, startTime: 0, endTime: Math.max(actualEndTime, 1) }));
+              updatePanel('export', { isOpen: true, zIndex: maxZIndex + 1 });
+            }} className="bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] text-white px-4 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all border border-blue-400/20">
+              <Download size={13} /> Export
+            </button>
+          </div>
+        </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        <AssetLibrary
-          assets={assets}
-          onAddAsset={handleAddAsset}
-          onDragStart={handleDragStart}
-          onAddTextClip={(clip) => {
-            // Find first text track or fallback to any track
-            const trackId = tracks.find(t => t.type === MediaType.TEXT)?.id || tracks[0].id;
+      <Ribbon
+        onTogglePanel={togglePanel}
+        activePanels={panels.filter(p => p.isOpen).map(p => p.id)}
+        onResetLayout={resetLayout}
+      />
 
-            // 1. Create the persistent Asset so it shows up in "My Text Assets"
-            const newAsset: Asset = {
-              id: `txt_${crypto.randomUUID()}`,
-              type: MediaType.TEXT,
-              name: clip.text || 'Custom Text',
-              src: '',
-            };
-            handleAddAsset(newAsset);
 
-            // 2. Add to Timeline with link to asset
-            const newClip: Clip = {
-              ...clip,
-              id: crypto.randomUUID(),
-              assetId: newAsset.id,
-              trackId,
-              start: currentTime,
-              duration: 5,
-              offset: 0,
-              type: MediaType.TEXT,
-              src: '',
-              effects: [],
-              animationDuration: 0.5
-            } as Clip;
+      {/* WORKSPACE AREA */}
+      <div className="flex-1 flex overflow-hidden relative bg-[var(--bg-root)]">
 
-            updateClips([...clips, newClip]);
-            setSelectedClipIds([newClip.id]);
-          }}
-        />
-        <div className="flex-1 flex flex-col min-w-0 bg-[#000000]">
-          <div className="flex-1 flex min-h-0 border-b border-[#27272a] relative">
-            <div className="flex-1 bg-black/90 relative flex flex-col items-center justify-center p-8 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900/50 to-black">
-              <Player
-                clips={clips}
-                assets={assets}
-                currentTime={currentTime}
-                isPlaying={isPlaying}
-                onTogglePlay={() => setIsPlaying(!isPlaying)}
-                onSeek={setCurrentTime}
-                duration={duration}
-                exportStatus={exportStatus}
-                exportSettings={exportSettings}
-                onExportFinish={() => { setExportStatus('completed'); setIsPlaying(false); }}
-                onExportProgress={setExportProgress}
-                width={canvasWidth}
-                height={canvasHeight}
-              />
+        {/* LEFT DOCK */}
+        {panels.some(p => p.isOpen && p.isDocked && p.dockSide === 'left') && (
+          <div style={{ width: sidebarWidth }} className="flex-shrink-0 flex flex-col border-r border-[var(--border-base)] bg-[var(--bg-panel)] relative z-20 h-full">
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {panels.filter(p => p.isOpen && p.isDocked && p.dockSide === 'left').map(panel => (
+                <div key={panel.id} className="flex-1 relative overflow-hidden flex flex-col min-h-0">
+                  <FloatingPanel
+                    id={panel.id}
+                    title={panel.title}
+                    isOpen={panel.isOpen}
+                    position={panel.position}
+                    size={panel.size}
+                    zIndex={panel.zIndex}
+                    isDocked={true}
+                    dockSide="left"
+                    onClose={() => togglePanel(panel.id)}
+                    onUpdate={updatePanel}
+                    onFocus={() => focusPanel(panel.id)}
+                    onDock={handleDock}
+                    onUndock={handleUndock}
+                  >
+                    {renderPanelContent(panel)}
+                  </FloatingPanel>
+                </div>
+              ))}
             </div>
-            {showExportPanel ? <ExportPanel settings={exportSettings} onUpdateSettings={setExportSettings} onStartExport={startExport} onCancelExport={cancelExport} onClose={() => { setShowExportPanel(false); setExportStatus('idle'); }} isExporting={exportStatus === 'exporting'} progress={exportProgress} currentTime={currentTime} status={exportStatus} maxDuration={duration} /> :
-              selectedClips.length > 0 ? <PropertiesPanel clips={selectedClips} allClips={clips} onUpdate={(u) => handleClipUpdate(selectedClips[0].id, u)} onDelete={handleDeleteClip} onDetachAudio={handleDetachAudio} onClose={() => setSelectedClipIds([])} onSeek={setCurrentTime} customFonts={customFonts} onUploadFont={handleUploadFont} timerInputRef={timerInputRef} /> : null}
+            <div className="resizer-v absolute right-0 top-0 bottom-0 cursor-col-resize group z-30 w-2 -mr-1 hover:bg-transparent transition-colors" onMouseDown={() => setIsResizing('sidebar')}>
+              <div className="absolute right-1 w-px h-full bg-[var(--border-base)] group-hover:bg-[var(--accent-primary)] transition-colors"></div>
+            </div>
           </div>
-          <div className="h-[340px] flex-shrink-0 bg-[#09090b] relative z-20 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.5)] border-t border-white/5">
-            <Timeline tracks={tracks} clips={clips} currentTime={currentTime} duration={duration} zoom={zoom} onSeek={setCurrentTime} onClipUpdate={handleClipUpdate} selectedClipIds={selectedClipIds} onSelectClip={(id, multi) => { if (multi) { if (selectedClipIds.includes(id)) setSelectedClipIds(prev => prev.filter(i => i !== id)); else setSelectedClipIds(prev => [...prev, id]); } else { setSelectedClipIds([id]); } }} onClearSelection={() => setSelectedClipIds([])} onDropAsset={handleDropAsset} onCreateEffectClip={handleCreateEffectClip} onCreateAnimationClip={handleCreateAnimationClip} onSplitClip={handleSplitClip} onDeleteClip={handleDeleteClip} onZoomChange={setZoom} onClipMove={(id, start, track) => { setClips(prev => prev.map(c => c.id === id ? { ...c, start, trackId: track } : c)); }} onAddTrack={() => setTracks(prev => [...prev, { id: `t${prev.length + 1}`, type: MediaType.VIDEO, name: `Track ${prev.length + 1}` }])} />
+        )}
+
+        {/* CENTER COLUMN */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+
+          {/* TOP DOCK */}
+          {panels.some(p => p.isOpen && p.isDocked && p.dockSide === 'top') && (
+            <div style={{ height: topHeight }} className="flex-shrink-0 flex flex-col border-b border-[var(--border-base)] bg-[var(--bg-panel)] relative z-20">
+              <div className="flex-1 flex overflow-hidden">
+                {panels.filter(p => p.isOpen && p.isDocked && p.dockSide === 'top').map(panel => (
+                  <div key={panel.id} className="flex-1 relative overflow-hidden flex flex-col">
+                    <FloatingPanel
+                      id={panel.id}
+                      title={panel.title}
+                      isOpen={panel.isOpen}
+                      position={panel.position}
+                      size={panel.size}
+                      zIndex={panel.zIndex}
+                      isDocked={true}
+                      dockSide="top"
+                      onClose={() => togglePanel(panel.id)}
+                      onUpdate={updatePanel}
+                      onFocus={() => focusPanel(panel.id)}
+                      onDock={handleDock}
+                      onUndock={handleUndock}
+                    >
+                      {renderPanelContent(panel)}
+                    </FloatingPanel>
+                  </div>
+                ))}
+              </div>
+              <div className="resizer-h absolute bottom-0 left-0 right-0 cursor-row-resize group z-30 h-2 -mb-1 hover:bg-transparent transition-colors" onMouseDown={() => setIsResizing('top')}>
+                <div className="absolute bottom-1 w-full h-px bg-[var(--border-base)] group-hover:bg-[var(--accent-primary)] transition-colors"></div>
+              </div>
+            </div>
+          )}
+
+          {/* CENTER DOCK & FLOATING AREA */}
+          <div className="flex-1 flex overflow-hidden relative bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:20px_20px]">
+            {/* Render Center Docked Panels */}
+            {panels.some(p => p.isOpen && p.isDocked && p.dockSide === 'center') ? (
+              <div className="w-full h-full flex flex-col overflow-hidden">
+                {panels.filter(p => p.isOpen && p.isDocked && p.dockSide === 'center').map(panel => (
+                  <div key={panel.id} className="flex-1 relative overflow-hidden flex flex-col min-h-0 border-b last:border-0 border-[#27272a]">
+                    <FloatingPanel
+                      id={panel.id}
+                      title={panel.title}
+                      isOpen={panel.isOpen}
+                      position={panel.position}
+                      size={panel.size}
+                      zIndex={panel.zIndex}
+                      isDocked={true}
+                      dockSide="center"
+                      onClose={() => togglePanel(panel.id)}
+                      onUpdate={updatePanel}
+                      onFocus={() => focusPanel(panel.id)}
+                      onDock={handleDock}
+                      onUndock={handleUndock}
+                    >
+                      {renderPanelContent(panel)}
+                    </FloatingPanel>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {/* Floating Panels Container - MOVED TO ROOT */}
+
+
+            {/* Modal removed - Handled by FloatingPanel */}
           </div>
+
+          {/* BOTTOM DOCK */}
+          {panels.some(p => p.isOpen && p.isDocked && p.dockSide === 'bottom') && (
+            <div style={{ height: bottomHeight }} className="flex-shrink-0 flex flex-col border-t border-[var(--border-base)] bg-[var(--bg-panel)] relative z-20">
+              <div className="resizer-h absolute top-0 left-0 right-0 cursor-row-resize group z-30 h-2 -mt-1 hover:bg-transparent transition-colors" onMouseDown={() => setIsResizing('bottom')}>
+                <div className="absolute top-1 w-full h-px bg-[var(--border-base)] group-hover:bg-[var(--accent-primary)] transition-colors"></div>
+              </div>
+              <div className="flex-1 flex overflow-hidden">
+                {panels.filter(p => p.isOpen && p.isDocked && p.dockSide === 'bottom').map(panel => (
+                  <div key={panel.id} className="flex-1 relative overflow-hidden flex flex-col min-w-0">
+                    <FloatingPanel
+                      id={panel.id}
+                      title={panel.title}
+                      isOpen={panel.isOpen}
+                      position={panel.position}
+                      size={panel.size}
+                      zIndex={panel.zIndex}
+                      isDocked={true}
+                      dockSide="bottom"
+                      onClose={() => togglePanel(panel.id)}
+                      onUpdate={updatePanel}
+                      onFocus={() => focusPanel(panel.id)}
+                      onDock={handleDock}
+                      onUndock={handleUndock}
+                    >
+                      {renderPanelContent(panel)}
+                    </FloatingPanel>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* RIGHT DOCK */}
+        {((panels.some(p => p.isOpen && p.isDocked && p.dockSide === 'right')) || (selectedClips.length > 0)) && (
+          <div style={{ width: rightSidebarWidth }} className="flex-shrink-0 flex flex-col border-l border-[var(--border-base)] bg-[var(--bg-panel)] relative z-20 h-full">
+            <div className="resizer-v absolute left-0 top-0 bottom-0 cursor-col-resize group z-30 w-2 -ml-1 hover:bg-transparent transition-colors" onMouseDown={() => setIsResizing('rightSidebar')}>
+              <div className="absolute left-1 w-px h-full bg-[var(--border-base)] group-hover:bg-[var(--accent-primary)] transition-colors"></div>
+            </div>
+
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Regular Right Docked Panels */}
+              {panels.filter(p => p.isOpen && p.isDocked && p.dockSide === 'right').map(panel => (
+                <div key={panel.id} className="flex-1 relative overflow-hidden flex flex-col min-h-0 border-b last:border-0 border-[#27272a]">
+                  <FloatingPanel
+                    id={panel.id}
+                    title={panel.title}
+                    isOpen={panel.isOpen}
+                    position={panel.position}
+                    size={panel.size}
+                    zIndex={panel.zIndex}
+                    isDocked={true}
+                    dockSide="right"
+                    onClose={() => togglePanel(panel.id)}
+                    onUpdate={updatePanel}
+                    onFocus={() => focusPanel(panel.id)}
+                    onDock={handleDock}
+                    onUndock={handleUndock}
+                  >
+                    {renderPanelContent(panel)}
+                  </FloatingPanel>
+                </div>
+              ))}
+
+              {/* Properties Panel (always docked right if open and no other panels hide it?) */}
+              {/* Note: In original logic, PropertiesPanel was just conditional. Now we stack it or toggle it? */}
+              {/* Let's keep it simply stacked at the bottom if clips are selected */}
+              {selectedClips.length > 0 && (
+                <div className="flex-1 relative overflow-hidden flex flex-col min-h-0">
+                  <div className="h-9 flex items-center justify-between px-3 bg-[#27272a] border-b border-[#3f3f46] shrink-0">
+                    <span className="text-xs font-semibold text-gray-200">Properties</span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setSelectedClipIds([])} className="text-gray-500 hover:text-white p-1"><X size={12} /></button>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-auto">
+                    <PropertiesPanel
+                      clips={selectedClips}
+                      allClips={clips}
+                      onUpdate={(u) => handleClipUpdate(selectedClips[0].id, u)}
+                      onDelete={handleDeleteClip}
+                      onDetachAudio={handleDetachAudio}
+                      onClose={() => setSelectedClipIds([])}
+                      onSeek={setCurrentTime}
+                      customFonts={customFonts}
+                      onUploadFont={handleUploadFont}
+                      timerInputRef={timerInputRef}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
-    </div>
+
+      {/* Floating Windows Container - Root Level */}
+      <div className="absolute inset-0 pointer-events-none z-[100]">
+        {panels.filter(p => !p.isDocked).map(panel => (
+          <div key={panel.id} className="pointer-events-auto">
+            <FloatingPanel
+              id={panel.id}
+              title={panel.title}
+              isOpen={panel.isOpen}
+              position={panel.position}
+              size={panel.size}
+              zIndex={panel.zIndex}
+              isDocked={false}
+              onClose={() => togglePanel(panel.id)}
+              onUpdate={updatePanel}
+              onFocus={() => focusPanel(panel.id)}
+              onDock={handleDock}
+              onUndock={handleUndock}
+            >
+              {renderPanelContent(panel)}
+            </FloatingPanel>
+          </div>
+        ))}
+      </div>
+
+    </div >
   );
 }
 

@@ -227,3 +227,31 @@ export const generateTransitionSettings = async (description: string): Promise<a
     };
   }
 }
+
+/**
+ * Generates an audio asset (Sound FX or Music).
+ * Currently a mock that returns stock audio.
+ */
+export const generateAudioAsset = async (prompt: string, type: 'sfx' | 'music'): Promise<string> => {
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 1500));
+
+  // Return sample audio files based on type
+  if (type === 'music') {
+    return "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3";
+  } else {
+    return "https://cdn.pixabay.com/audio/2022/03/15/audio_b325d5a9c2.mp3";
+  }
+}
+
+/**
+ * Generates speech from text (TTS).
+ * Currently a mock.
+ */
+export const generateTTSAsset = async (text: string, voice: string): Promise<string> => {
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 1500));
+
+  // Mock: Return a generic voiceover sample
+  return "https://cdn.pixabay.com/audio/2022/10/16/audio_1808fbf07a.mp3";
+}

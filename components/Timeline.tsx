@@ -68,13 +68,6 @@ const Timeline: React.FC<TimelineProps> = ({
         // onClearSelection(); 
     };
 
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault(); // Essential to allow dropping
-    };
-
-    const handleDragLeave = (e: React.DragEvent) => {
-        e.preventDefault();
-    };
 
     const handleClipClick = (e: React.MouseEvent, clipId: string) => {
         e.stopPropagation();
@@ -243,38 +236,142 @@ const Timeline: React.FC<TimelineProps> = ({
         });
     };
 
+    // Ghost Clip Logic for smooth dragging
+    const ghostClipRef = useRef<HTMLDivElement>(null);
+    const [ghostState, setGhostState] = useState<{ visible: boolean; width: number; name: string; type: MediaType } | null>(null);
+
+    const updateGhostPosition = (e: React.DragEvent) => {
+        if (!ghostClipRef.current || !timelineRef.current) return;
+
+        const rect = timelineRef.current.getBoundingClientRect();
+        const scrollLeft = timelineRef.current.scrollLeft;
+
+        // Calculate X similar to other handlers
+        // x relative to timeline content start (200px sidebar offset)
+        // We want the position on screen relative to the container for the ghost
+
+        // Ghost is absolute positioned within the "relative min-w-max" container
+        // So left = 200 + (time * zoom).
+
+        // Let's get raw mouse X relative to the timeline container
+        let rawX = e.clientX - rect.left + scrollLeft;
+
+        // Clamp to sidebar
+        if (rawX < 200) rawX = 200;
+
+        // Find track Y
+        const trackElement = (e.target as HTMLElement).closest('[data-track-id]');
+        let top = 0;
+        let trackFound = false;
+
+        if (trackElement) {
+            const trackRect = trackElement.getBoundingClientRect();
+            const containerRect = timelineRef.current.getBoundingClientRect();
+            // Calculate top relative to the scrolled container
+            top = trackRect.top - containerRect.top + timelineRef.current.scrollTop + 32; // +32 for header padding approx? 
+            // Actually, best to just use the `offsetTop` relative to the container if possible, 
+            // but `trackElement` is deeper.
+
+            // Simpler: The container has `relative`. The tracks are children.
+            // visual top = track.offsetTop.
+            // Note: trackElement is the `div` with `data-track-id`. 
+            // It is inside the list. specific `offsetTop` should work.
+            const el = trackElement as HTMLElement;
+            // The track element is inside the `pb-8` container.
+            // We need its offsetTop relative to that container.
+            top = el.offsetTop;
+            trackFound = true;
+        }
+
+        // Apply transform
+        // We subtract scrollLeft from x because the ghost is inside the scrolling container?
+        // Wait, if ghost is inside `relative min-w-max`, it scrolls WITH the content.
+        // So we just need to set `left` to the absolute coordinate.
+
+        // Calculate time to snap
+        const xInTimeline = rawX - 200;
+        const time = Math.max(0, xInTimeline / zoom);
+        // Snap to grid (optional, maybe 0.1s?)
+        // const snappedTime = Math.round(time * 10) / 10;
+
+        const finalLeft = 200 + (time * zoom);
+
+        ghostClipRef.current.style.transform = `translate(${finalLeft}px, ${trackFound ? top + 8 : 40}px)`; // +8 for padding inside track
+        ghostClipRef.current.style.display = 'flex';
+    };
+
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        if (draggingClipRef.current) {
+            setGhostState({
+                visible: true,
+                width: draggingClipRef.current.duration * zoom,
+                name: draggingClipRef.current.name,
+                type: draggingClipRef.current.type
+            });
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault(); // Allow drop
+        if (draggingClipRef.current) {
+            updateGhostPosition(e);
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setGhostState(null);
+        if (ghostClipRef.current) ghostClipRef.current.style.display = 'none';
+    };
+
+    // ... (rest of handlers)
+
+    const handleDragEnd = () => {
+        draggingClipRef.current = null;
+        setGhostState(null);
+        if (ghostClipRef.current) ghostClipRef.current.style.display = 'none';
+        setIsResizing(null);
+    };
+
+    // Fix drop to clean up ghost
+    const wrapHandleDrop = (e: React.DragEvent) => {
+        handleDragEnd(); // Reset ghost state
+        handleDrop(e);
+    };
+
     return (
-        <div className="flex flex-col h-full bg-[#09090b] text-xs select-none relative group">
+        <div className="flex flex-col h-full bg-[var(--bg-root)] text-xs select-none relative group">
             {/* Toolbar */}
-            <div className="h-12 bg-[#09090b]/90 backdrop-blur-md border-t border-white/5 flex items-center justify-between px-4 z-40 relative">
-                <div className="flex items-center gap-1 bg-[#18181b] p-1 rounded-lg border border-white/5">
-                    <button onClick={onAddTrack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-all text-[11px] font-medium"><Plus size={12} /> Track</button>
-                    <div className="h-4 w-px bg-white/10 mx-1" />
-                    <button onClick={onSplitClip} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-all text-[11px] font-medium" title="Split (S)"><Scissors size={12} /> Split</button>
-                    <button onClick={onDeleteClip} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all text-[11px] font-medium" title="Delete (Del)"><Trash2 size={12} /> Delete</button>
+            <div className="h-10 bg-[var(--bg-header)]/90 backdrop-blur-md border-t border-[var(--border-base)] flex items-center justify-between px-3 z-40 relative">
+                <div className="flex items-center gap-1 bg-[var(--bg-item)] p-0.5 rounded-lg border border-[var(--border-light)]">
+                    <button onClick={onAddTrack} className="flex items-center gap-1.5 px-2 py-1 rounded-sm hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-white transition-all text-[10px] font-medium"><Plus size={11} /> Track</button>
+                    <div className="h-3 w-px bg-white/10 mx-1" />
+                    <button onClick={onSplitClip} className="flex items-center gap-1.5 px-2 py-1 rounded-sm hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-white transition-all text-[10px] font-medium" title="Split (S)"><Scissors size={11} /> Split</button>
+                    <button onClick={onDeleteClip} className="flex items-center gap-1.5 px-2 py-1 rounded-sm hover:bg-red-500/10 text-[var(--text-secondary)] hover:text-red-400 transition-all text-[10px] font-medium" title="Delete (Del)"><Trash2 size={11} /> Delete</button>
                 </div>
-                <div className="flex items-center gap-3 bg-[#18181b] p-1 rounded-lg border border-white/5">
-                    <button onClick={() => onZoomChange(Math.max(10, zoom - 50))} className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition"><ZoomOut size={12} /></button>
-                    <input type="range" min="10" max="3000" step="10" value={zoom} onChange={(e) => onZoomChange(Number(e.target.value))} className="w-24 h-1 bg-[#27272a] rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                    <button onClick={() => onZoomChange(Math.min(3000, zoom + 50))} className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition"><ZoomIn size={12} /></button>
+                <div className="flex items-center gap-2 bg-[var(--bg-item)] p-0.5 rounded-lg border border-[var(--border-light)]">
+                    <button onClick={() => onZoomChange(Math.max(10, zoom - 50))} className="p-1 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white transition"><ZoomOut size={11} /></button>
+                    <input type="range" min="10" max="3000" step="10" value={zoom} onChange={(e) => onZoomChange(Number(e.target.value))} className="w-20 h-1 bg-[var(--bg-panel)] rounded-lg appearance-none cursor-pointer accent-[var(--accent-primary)]" />
+                    <button onClick={() => onZoomChange(Math.min(3000, zoom + 50))} className="p-1 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white transition"><ZoomIn size={11} /></button>
                 </div>
             </div>
 
             <div className="flex-1 flex flex-col overflow-hidden relative">
-                <div className="flex-1 overflow-auto bg-[#09090b] relative scrollbar-thin" ref={timelineRef} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={handleTimelineClick}>
-                    <div className="flex h-8 bg-[#09090b] min-w-max sticky top-0 z-30 border-b border-white/5">
-                        <div className="w-[200px] border-r border-white/5 bg-[#09090b] z-40 sticky left-0 flex items-center justify-center">
-                            <div className="text-[10px] text-gray-600 font-bold uppercase tracking-widest">Tracks</div>
+                <div className="flex-1 overflow-auto bg-[var(--bg-root)] relative custom-scrollbar" ref={timelineRef} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDrop={wrapHandleDrop} onClick={handleTimelineClick} onDragEnd={handleDragEnd}>
+                    <div className="flex h-8 bg-[var(--bg-panel)] min-w-max sticky top-0 z-30 border-b border-[var(--border-base)]">
+                        <div className="w-[200px] border-r border-[var(--border-base)] bg-[var(--bg-panel)] z-40 sticky left-0 flex items-center justify-center">
+                            <div className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-widest">Tracks</div>
                         </div>
                         <div className="relative h-full cursor-pointer overflow-hidden pt-2" style={{ width: duration * zoom }} ref={rulerRef}>{renderRulerTicks()}</div>
                     </div>
                     <div className="relative min-w-max pb-8">
-                        {zoom > 50 && <div className="absolute inset-0 pointer-events-none z-0" style={{ left: 200, width: duration * zoom, backgroundImage: 'linear-gradient(to right, #27272a 1px, transparent 1px)', backgroundSize: `${zoom}px 100%`, opacity: 0.1 }} />}
+                        {zoom > 50 && <div className="absolute inset-0 pointer-events-none z-0" style={{ left: 200, width: duration * zoom, backgroundImage: 'linear-gradient(to right, var(--border-base) 1px, transparent 1px)', backgroundSize: `${zoom}px 100%`, opacity: 0.1 }} />}
 
                         {tracks.map((track, index) => (
-                            <div key={track.id} data-track-id={track.id} className={`flex h-24 border-b border-white/5 ${index % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.02]'} relative group/track transition-colors hover:bg-white/[0.03]`}>
-                                <div className="w-[200px] flex-shrink-0 bg-[#09090b] border-r border-white/5 p-3 flex flex-col justify-center gap-1 z-20 sticky left-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)]">
-                                    <div className="flex items-center gap-3 text-gray-400 group-hover/track:text-gray-200 transition-colors">
+                            <div key={track.id} data-track-id={track.id} className={`flex h-24 border-b border-[var(--border-base)] ${index % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.01]'} relative group/track transition-colors hover:bg-white/[0.02]`}>
+                                <div className="w-[200px] flex-shrink-0 bg-[var(--bg-panel)] border-r border-[var(--border-base)] p-3 flex flex-col justify-center gap-1 z-20 sticky left-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)]">
+                                    <div className="flex items-center gap-3 text-[var(--text-secondary)] group-hover/track:text-gray-200 transition-colors">
                                         <div className="p-1.5 rounded-md bg-white/5">{getIcon(track.type)}</div>
                                         <span className="truncate text-xs font-medium tracking-wide">{track.name}</span>
                                     </div>
@@ -294,8 +391,30 @@ const Timeline: React.FC<TimelineProps> = ({
                                 </div>
                             </div>
                         ))}
-                        <div className="absolute top-0 bottom-0 w-px bg-blue-500 pointer-events-none z-50 shadow-[0_0_8px_rgba(59,130,246,0.6)]" style={{ left: 200 + (currentTime * zoom) }}>
-                            <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-blue-500 transform rotate-45 shadow-sm rounded-[1px]" />
+
+                        {/* Ghost Clip Element */}
+                        {ghostState && (
+                            <div
+                                ref={ghostClipRef}
+                                className={`absolute top-0 left-0 h-20 border rounded pointer-events-none z-50 flex items-center px-2 backdrop-blur-sm shadow-2xl transition-transform duration-75`}
+                                style={{
+                                    width: ghostState.width,
+                                    display: 'none',
+                                    backgroundColor:
+                                        ghostState.type === MediaType.VIDEO ? 'rgba(30, 58, 138, 0.7)' :
+                                            ghostState.type === MediaType.IMAGE ? 'rgba(88, 28, 135, 0.7)' :
+                                                ghostState.type === MediaType.TEXT ? 'rgba(113, 63, 18, 0.7)' :
+                                                    ghostState.type === MediaType.AUDIO ? 'rgba(20, 83, 45, 0.7)' :
+                                                        'rgba(59, 130, 246, 0.5)',
+                                    borderColor: 'rgba(255,255,255,0.4)'
+                                }}
+                            >
+                                <span className="text-white font-bold text-xs truncate drop-shadow-md">{ghostState.name}</span>
+                            </div>
+                        )}
+
+                        <div className="absolute top-0 bottom-0 w-px bg-[var(--accent-primary)] pointer-events-none z-50 shadow-[0_0_8px_rgba(59,130,246,0.6)]" style={{ left: 200 + (currentTime * zoom) }}>
+                            <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-[var(--accent-primary)] transform rotate-45 shadow-sm rounded-[1px]" />
                         </div>
                     </div>
                 </div>
