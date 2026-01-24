@@ -97,6 +97,10 @@ function App() {
     setSelectedClipIds([]);
   };
 
+  const handleAddClip = (clip: Clip) => {
+    updateClips([...clips, clip]);
+  };
+
   const handleSplitClip = () => {
     if (selectedClipIds.length === 0) return;
 
@@ -649,7 +653,18 @@ function App() {
         />
       );
       case 'ai': return <AIPanel onAddAsset={handleAddAsset} />;
-      case 'script': return <ScriptPanel tracks={tracks} clips={clips} assets={assets} onApplyScript={updateClips} />;
+      case 'script': return (
+        <ScriptPanel
+          tracks={tracks}
+          clips={clips}
+          assets={assets}
+          onApplyScript={updateClips}
+          onAddClip={handleAddClip}
+          onUpdateClip={handleClipUpdate}
+          onRemoveClip={handleDeleteClip}
+          onAddAsset={handleAddAsset}
+        />
+      );
       case 'preview': return (
         <div className="flex-1 flex items-center justify-center overflow-hidden bg-black h-full w-full">
           <Player

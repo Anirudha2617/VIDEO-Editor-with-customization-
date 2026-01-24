@@ -62,6 +62,7 @@ export const renderCanvas = (
     let trackAnimOffsetX = 0;
     let trackAnimOffsetY = 0;
     let trackAnimScale = 1;
+    let trackAnimRotation = 0;
     let trackOverlayColor = null;
     let trackCustomDraw: ((ctx: CanvasRenderingContext2D, width: number, height: number, snapshot?: HTMLCanvasElement | OffscreenCanvas) => void) | undefined = undefined;
 
@@ -130,6 +131,7 @@ export const renderCanvas = (
         if (res.offsetX !== undefined) trackAnimOffsetX = res.offsetX;
         if (res.offsetY !== undefined) trackAnimOffsetY = res.offsetY;
         if (res.scale !== undefined) trackAnimScale = res.scale;
+        if (res.rotation !== undefined) trackAnimRotation = res.rotation;
         if (res.overlayColor) trackOverlayColor = res.overlayColor;
         if (res.customDraw) trackCustomDraw = res.customDraw;
       } else {
@@ -152,6 +154,7 @@ export const renderCanvas = (
 
     // Apply Track Transforms
     ctx.translate(width / 2, height / 2);
+    ctx.rotate(trackAnimRotation * Math.PI / 180);
     ctx.scale(trackAnimScale, trackAnimScale);
     ctx.translate(-width / 2, -height / 2);
     ctx.translate(trackAnimOffsetX, trackAnimOffsetY);

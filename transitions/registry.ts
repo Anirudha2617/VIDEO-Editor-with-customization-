@@ -9,6 +9,7 @@ import { fadeMultiTransition } from './library/fade-multi';
 import { wipeMultiTransition } from './library/wipe-multi';
 import { zoomMultiTransition } from './library/zoom-multi';
 import { breakingGlassTransition } from './library/breaking-glass';
+import { rotateTransition } from './library/rotate';
 
 // Mutable registry - only base transitions from library files
 const transitions: Record<string, Transition> = {
@@ -21,7 +22,8 @@ const transitions: Record<string, Transition> = {
     'fade-multi': fadeMultiTransition,
     'wipe-multi': wipeMultiTransition,
     'zoom-multi': zoomMultiTransition,
-    'breaking-glass': breakingGlassTransition
+    'breaking-glass': breakingGlassTransition,
+    'rotate': rotateTransition
 };
 
 // Listeners for UI updates
