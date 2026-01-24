@@ -14,6 +14,8 @@ interface ScriptPanelProps {
     onUpdateClip: (id: string, updates: Partial<Clip>) => void;
     onRemoveClip: (id: string) => void;
     onAddAsset: (asset: Asset) => void;
+    selectedClipIds: string[];
+    onSelectClip: (id: string) => void;
 }
 
 interface ConsoleOutput {
@@ -23,7 +25,8 @@ interface ConsoleOutput {
 }
 
 const ScriptPanel: React.FC<ScriptPanelProps> = ({
-    tracks, clips, assets, onApplyScript, onAddClip, onUpdateClip, onRemoveClip, onAddAsset
+    tracks, clips, assets, onApplyScript, onAddClip, onUpdateClip, onRemoveClip, onAddAsset,
+    selectedClipIds, onSelectClip
 }) => {
     // Panel 1: Command Console
     const [consoleCode, setConsoleCode] = useState('');
@@ -31,6 +34,10 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
 
     // Panel 2: Timeline State
     const [stateCode, setStateCode] = useState('');
+    const [autoSelect, setAutoSelect] = useState(true);
+    const editorRef = useRef<any>(null);
+    const monacoRef = useRef<any>(null);
+    const isSyncingSelection = useRef(false);
 
     // UI State
     const [executing, setExecuting] = useState(false);
@@ -44,6 +51,77 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
         const newState = generateTimelineState(tracks, clips, assets);
         setStateCode(newState);
     }, [tracks, clips, assets]);
+
+    // Timeline -> Editor Sync
+    useEffect(() => {
+        if (!autoSelect || !editorRef.current || selectedClipIds.length === 0 || isSyncingSelection.current) return;
+
+        const selectedId = selectedClipIds[0];
+        // Find line with this ID
+        const code = editorRef.current.getValue();
+        const lines = code.split('\n');
+
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes(`"${selectedId}"`)) {
+                editorRef.current.revealLineInCenter(i + 1);
+                editorRef.current.setPosition({ lineNumber: i + 1, column: 1 });
+                // Also highlight the block? For now just cursor
+                break;
+            }
+        }
+    }, [selectedClipIds, autoSelect]);
+
+    // Editor -> Timeline Sync (handled in editor OnChangeCursor)
+    const handleEditorDidMount = (editor: any, monaco: any) => {
+        editorRef.current = editor;
+        monacoRef.current = monaco;
+
+        editor.onDidChangeCursorPosition((e: any) => {
+            if (!autoSelect || isSyncingSelection.current) return;
+
+            const position = e.position;
+            const code = editor.getValue();
+            const lines = code.split('\n');
+
+            // Search upwards from cursor for an "id" field
+            let foundId = null;
+            let braceCount = 0;
+
+            // Simple heuristic: Look upwards for "id": "..." 
+            // verifying we haven't crossed a '},' that closes the object
+            // This is basic but works for formatted JSON
+            for (let i = position.lineNumber - 1; i >= 0; i--) {
+                const line = lines[i];
+                if (line.includes('},') || (line.trim() === '}' && i !== position.lineNumber - 1)) {
+                    // We crossed a closing brace ABOVE us? That usually means we are between objects
+                    // But if we are IN an object, we shouldn't see a closing brace of a sibling above us 
+                    // unless we go past the start of our object.
+                    // Actually, simpler: The first "id" we find moving UP is our ID, 
+                    // UNLESS we hit a "{" that starts the object.
+                    // The safest heuristic for this specific formatted output:
+                    // Find the nearest "id": "..." above. 
+                    // Check if there is a "}" between that line and our cursor.
+                    break;
+                }
+
+                const idMatch = line.match(/"id":\s*"([^"]+)"/);
+                if (idMatch) {
+                    foundId = idMatch[1];
+                    // Verify we haven't crossed a closing brace strictly between the found line and current pos
+                    // (The loop check above handles most cases, but let's double check text range)
+                    // ... actually for this feature, "nearest ID above" is 99% correct for user interaction
+                    break;
+                }
+            }
+
+            if (foundId) {
+                isSyncingSelection.current = true;
+                onSelectClip(foundId);
+                // Debounce/reset flag
+                setTimeout(() => { isSyncingSelection.current = false; }, 100);
+            }
+        });
+    };
 
     // Generate TypeScript definitions for Monaco IntelliSense
     const generateTypeDefinitions = () => {
@@ -282,6 +360,16 @@ declare const clips: any[];
                             title="Refresh from timeline"
                         >
                             <RefreshCw size={12} />
+                        </button>
+                        <button
+                            onClick={() => setAutoSelect(!autoSelect)}
+                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition border ${autoSelect
+                                ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
+                                : 'bg-[#333] text-gray-400 border-transparent hover:bg-[#444]'
+                                }`}
+                            title="Auto-select clip from timeline/cursor"
+                        >
+                            <span className="text-[10px] font-bold">◉</span> Sync
                         </button>
                         <button
                             onClick={handleApplyState}

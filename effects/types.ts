@@ -8,7 +8,7 @@ export interface EffectContext {
 
 export interface EffectResult {
     filter?: string; // CSS filter string
-    // In the future we could support custom draw operations for effects too
+    customDraw?: (ctx: CanvasRenderingContext2D, width: number, height: number) => void;
 }
 
 export interface EffectVariable {

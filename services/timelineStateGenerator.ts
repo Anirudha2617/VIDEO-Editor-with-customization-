@@ -30,55 +30,73 @@ export const generateTimelineState = (
         assetNames[asset.id] = asset.name.replace(/[^a-zA-Z0-9]/g, '_');
     });
 
-    // Build clean state structure
-    const state: TimelineState = {
-        clips: clips.map(clip => {
-            const trackIndex = tracks.findIndex(t => t.id === clip.trackId) + 1;
-            const assetName = assetNames[clip.assetId] || clip.assetId;
+    // Sort clips by Track index then Start time
+    const sortedClips = [...clips].sort((a, b) => {
+        const trackA = tracks.findIndex(t => t.id === a.trackId);
+        const trackB = tracks.findIndex(t => t.id === b.trackId);
+        if (trackA !== trackB) return trackA - trackB;
+        return a.start - b.start;
+    });
 
-            const clipData: any = {
-                id: clip.id,
-                asset: assetName,
-                track: trackIndex,
-                start: parseFloat(clip.start.toFixed(2)),
-                duration: parseFloat(clip.duration.toFixed(2))
-            };
+    let code = 'timeline = {\n  "clips": [\n';
+    let currentTrackId = '';
 
-            // Add optional properties only if they differ from defaults
-            if (clip.scale !== undefined && clip.scale !== 1) {
-                clipData.scale = clip.scale;
-            }
-            if (clip.opacity !== undefined && clip.opacity !== 1) {
-                clipData.opacity = clip.opacity;
-            }
-            if (clip.x !== undefined && clip.x !== 0) {
-                clipData.x = clip.x;
-            }
-            if (clip.y !== undefined && clip.y !== 0) {
-                clipData.y = clip.y;
-            }
-            if (clip.rotation !== undefined && clip.rotation !== 0) {
-                clipData.rotation = clip.rotation;
-            }
-            if (clip.transitionParams && Object.keys(clip.transitionParams).length > 0) {
-                clipData.transitionParams = clip.transitionParams;
-            }
+    sortedClips.forEach((clip, index) => {
+        const trackIndex = tracks.findIndex(t => t.id === clip.trackId) + 1;
+        const assetName = assetNames[clip.assetId] || clip.assetId;
 
-            // Add effects if any
-            if (clip.effects && clip.effects.length > 0) {
-                clipData.effects = clip.effects.map(e => ({
-                    type: e.name,
-                    value: e.value,
-                    ...e.effectParams
-                }));
-            }
+        // Grouping Comment
+        if (clip.trackId !== currentTrackId) {
+            const track = tracks.find(t => t.id === clip.trackId);
+            const trackName = track ? track.name : `Track ${trackIndex}`;
+            code += `\n    // === ${trackName} (Track ${trackIndex}) ===\n`;
+            currentTrackId = clip.trackId;
+        }
 
-            return clipData;
-        })
-    };
+        const clipData: any = {
+            id: clip.id,
+            asset: assetName,
+            track: trackIndex,
+            start: parseFloat(clip.start.toFixed(2)),
+            duration: parseFloat(clip.duration.toFixed(2))
+        };
 
-    // Format as clean JavaScript
-    return `timeline = ${JSON.stringify(state, null, 2)};`;
+        // Add optional properties only if they differ from defaults
+        if (clip.scale !== undefined && clip.scale !== 1) {
+            clipData.scale = clip.scale;
+        }
+        if (clip.opacity !== undefined && clip.opacity !== 1) {
+            clipData.opacity = clip.opacity;
+        }
+        if (clip.x !== undefined && clip.x !== 0) {
+            clipData.x = clip.x;
+        }
+        if (clip.y !== undefined && clip.y !== 0) {
+            clipData.y = clip.y;
+        }
+        if (clip.rotation !== undefined && clip.rotation !== 0) {
+            clipData.rotation = clip.rotation;
+        }
+        if (clip.transitionParams && Object.keys(clip.transitionParams).length > 0) {
+            clipData.transitionParams = clip.transitionParams;
+        }
+
+        // Add effects if any
+        if (clip.effects && clip.effects.length > 0) {
+            clipData.effects = clip.effects.map(e => ({
+                type: e.name,
+                value: e.value,
+                ...e.effectParams
+            }));
+        }
+
+        // Stringify and indent
+        const json = JSON.stringify(clipData, null, 2).replace(/\n/g, '\n    ');
+        code += `    ${json}${index < sortedClips.length - 1 ? ',' : ''}\n`;
+    });
+
+    code += '  ]\n};\n';
+    return code;
 };
 
 export const parseTimelineState = (
@@ -100,7 +118,9 @@ export const parseTimelineState = (
             throw new Error('Invalid timeline format');
         }
 
-        const state = JSON.parse(match[1]) as TimelineState;
+        // Strip comments before parsing
+        const jsonContent = match[1].replace(/\/\/.*$/gm, '');
+        const state = JSON.parse(jsonContent) as TimelineState;
 
         // Convert back to Clip objects
         const clips: Clip[] = state.clips.map(clipData => {
@@ -127,6 +147,15 @@ export const parseTimelineState = (
                         type: 'shape' as any, // MediaType.SHAPE
                         src: '',
                         subtype: 'animation' // shapes are often handled via animation path or similar
+                    };
+                } else if (assetId.startsWith('fx_')) {
+                    // Create virtual effect asset
+                    asset = {
+                        id: assetId,
+                        name: clipData.asset,
+                        type: 'effect' as any, // MediaType.EFFECT
+                        src: '',
+                        subtype: 'filter'
                     };
                 } else if (clipData.asset.startsWith('anim_')) {
                     // Fallback if ID was passed directly as name

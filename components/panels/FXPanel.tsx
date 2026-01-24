@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AnimationType, EasingType, Effect } from '../../types';
+import { EffectDefinition } from '../../effects/types';
 import { Wand2, Move, Sparkles } from 'lucide-react';
 import { getAllTransitions, subscribeToRegistry } from '../../transitions/registry';
+import { getAllEffects, subscribeToRegistry as subscribeToEffects } from '../../effects/registry';
 
 interface FXPanelProps {
     onDragStart: (e: React.DragEvent, item: any, type: string) => void;
@@ -28,6 +30,15 @@ const FXPanel: React.FC<FXPanelProps> = ({ onDragStart }) => {
                 duration: 1,
                 easing: 'ease-out' as EasingType
             })));
+        });
+        return unsubscribe;
+    }, []);
+
+    // Registry Effects
+    const [registryEffects, setRegistryEffects] = useState<EffectDefinition[]>(getAllEffects());
+    useEffect(() => {
+        const unsubscribe = subscribeToEffects(() => {
+            setRegistryEffects(getAllEffects());
         });
         return unsubscribe;
     }, []);
@@ -96,6 +107,31 @@ const FXPanel: React.FC<FXPanelProps> = ({ onDragStart }) => {
                                 />
                             </div>
                         ))}
+
+                        {/* Custom Registry Effects */}
+                        {registryEffects.length > 0 && (
+                            <>
+                                <h4 className="text-[10px] font-bold text-gray-500 uppercase mt-4 mb-2">Custom Effects</h4>
+                                {registryEffects.map((def) => (
+                                    <div
+                                        key={def.id}
+                                        draggable
+                                        onDragStart={(e) => onDragStart(e, {
+                                            id: def.id,
+                                            name: def.name,
+                                            type: 'filter',
+                                            value: 'custom', // Renderer should handle this by looking up registry if value is custom or if ID exists
+                                            kind: 'registry',
+                                            param: 0
+                                        }, 'effect')}
+                                        className="bg-[#27272a] hover:bg-[#3f3f46] p-3 rounded cursor-grab border border-[#3f3f46] flex items-center justify-between group transition border-l-2 border-l-cyan-500"
+                                    >
+                                        <span className="text-sm text-gray-300 group-hover:text-white">{def.name}</span>
+                                        <Sparkles size={14} className="text-cyan-500" />
+                                    </div>
+                                ))}
+                            </>
+                        )}
                     </div>
                 </div>
             </div>

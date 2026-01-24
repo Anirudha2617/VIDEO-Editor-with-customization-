@@ -7,6 +7,7 @@ interface ExportPanelProps {
     onUpdateSettings: (settings: ExportSettings) => void;
     onStartExport: () => void;
     onCancelExport: () => void;
+    onReset: () => void; // New prop
     isExporting: boolean;
     progress: number; // 0 to 100
     currentTime: number;
@@ -19,6 +20,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({
     onUpdateSettings,
     onStartExport,
     onCancelExport,
+    onReset,
     isExporting,
     progress,
     currentTime,
@@ -32,6 +34,13 @@ const ExportPanel: React.FC<ExportPanelProps> = ({
     useEffect(() => {
         setStatus(propStatus);
     }, [propStatus]);
+
+    // Auto-set duration if 0
+    useEffect(() => {
+        if (settings.endTime === 0 && maxDuration > 0) {
+            onUpdateSettings({ ...settings, endTime: maxDuration });
+        }
+    }, [maxDuration, settings.endTime]);
 
     const formatTime = (seconds: number) => {
         const m = Math.floor(seconds / 60);
@@ -236,6 +245,12 @@ const ExportPanel: React.FC<ExportPanelProps> = ({
                             <p className="text-[10px] text-gray-400">
                                 Your download should start automatically.
                             </p>
+                            <button
+                                onClick={onReset}
+                                className="w-full bg-[#27272a] hover:bg-[#3f3f46] text-white py-2 rounded text-xs font-medium transition"
+                            >
+                                Done / Back
+                            </button>
                         </div>
                     )}
                 </div>
@@ -243,5 +258,4 @@ const ExportPanel: React.FC<ExportPanelProps> = ({
         </div>
     );
 };
-
 export default ExportPanel;

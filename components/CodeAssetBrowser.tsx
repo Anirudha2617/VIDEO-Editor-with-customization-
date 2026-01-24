@@ -19,6 +19,8 @@ import {
     generateCodeSnippet
 } from '../services/geminiService';
 import { codeTemplates, CodeTemplate } from '../services/codeTemplates';
+import { registerTransition } from '../transitions/registry';
+import { registerEffect } from '../effects/registry';
 
 interface CodeAssetBrowserProps {
     onAddAsset: (asset: Asset) => void;
@@ -154,12 +156,93 @@ h1 {
                 return vid;
              };
 
-             // Map asset names to variables for user convenience?
-             // Maybe risky if names are invalid variable names.
-             // We'll stick to helpers.
-            
             try {
-              ${js}
+              // DETECT IF THIS IS A SCRIPT (Transition/Effect)
+              const userCode = \`${js.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`;
+              
+              if (userCode.includes('return {') && (userCode.includes('apply:') || userCode.includes('id:'))) {
+                 // Script Mode Preview Harness
+                 console.log('Running Script Preview Mode');
+                 
+                 // 1. Eval the object
+                 const createObj = new Function(userCode);
+                 const def = createObj();
+                 
+                 if (def.apply) {
+                     // 2. Setup Canvas if not exists
+                     let canvas = document.querySelector('canvas');
+                     if (!canvas) {
+                         canvas = document.createElement('canvas');
+                         canvas.width = window.innerWidth;
+                         canvas.height = window.innerHeight;
+                         document.body.appendChild(canvas);
+                     }
+                     const ctx = canvas.getContext('2d');
+                     
+                     // 3. Animation Loop for Transition
+                     let progress = 0;
+                     let dir = 1;
+                     
+                     if (def.type === 'filter' || !userCode.includes('ctx')) {
+                         // Effect Preview (Use an image)
+                         const img = new Image();
+                         img.src = "https://picsum.photos/800/600";
+                         img.onload = () => {
+                             function render() {
+                                 ctx.clearRect(0,0, canvas.width, canvas.height);
+                                 
+                                 // Draw Image
+                                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                 
+                                 // Apply Effect
+                                 const res = def.apply({ ctx, width: canvas.width, height: canvas.height, params: { intensity: (Math.sin(Date.now()/1000)+1)/2 } });
+                                 
+                                 if (res.filter) {
+                                     canvas.style.filter = res.filter;
+                                 }
+                                 requestAnimationFrame(render);
+                             }
+                             render();
+                         };
+                     } else {
+                         // Transition Preview
+                         function render() {
+                             ctx.clearRect(0,0, canvas.width, canvas.height);
+                             
+                             // Simulate "From" and "To" clips
+                             ctx.fillStyle = '#111';
+                             ctx.fillRect(0,0,canvas.width, canvas.height);
+                             
+                             // Draw Transition content
+                             const res = def.apply({ 
+                                 ctx, 
+                                 width: canvas.width, 
+                                 height: canvas.height, 
+                                 progress: progress, 
+                                 isExit: false, 
+                                 params: { color: '#ff0055' } 
+                             });
+                             
+                             // If overlay color returned (typical for wipe)
+                             if (res.overlayColor) {
+                                 ctx.fillStyle = res.overlayColor.style;
+                                 ctx.globalAlpha = res.overlayColor.opacity;
+                                 ctx.fillRect(0,0, canvas.width, canvas.height);
+                                 ctx.globalAlpha = 1;
+                             }
+                             
+                             progress += 0.01 * dir;
+                             if (progress >= 1 || progress <= 0) dir *= -1;
+                             
+                             requestAnimationFrame(render);
+                         }
+                         render();
+                     }
+                 }
+              } else {
+                  // Standard Mode
+                  ${js}
+              }
             } catch (e) {
               console.error('Preview error:', e);
             }
@@ -216,8 +299,29 @@ const vid_${cleanName} = createVideo("${asset.name}");
             if (renderType === 'auto') {
                 coreType = analyzeCodeType(html, css, js);
             } else if (['transition', 'animation', 'filter', 'video'].includes(renderType)) {
-                coreType = 'video';
-                if (renderType !== 'video') subtype = renderType as any;
+                if (renderType === 'transition') {
+                    // Check if it looks like a script (no HTML/CSS)
+                    if (html.length < 50 && css.length < 50 && js.includes('return {')) {
+                        // specialized Transition Script
+                        coreType = 'text';
+                        subtype = 'transition';
+                    } else {
+                        // Rendered Video Transition
+                        coreType = 'video';
+                        subtype = 'transition';
+                    }
+                } else if (renderType === 'filter') {
+                    if (html.length < 50 && css.length < 50 && js.includes('return {')) {
+                        coreType = 'text';
+                        subtype = 'filter' as any; // Using 'filter' as subtype for effect scripts
+                    } else {
+                        coreType = 'video';
+                        subtype = 'filter';
+                    }
+                } else {
+                    coreType = 'video';
+                    if (renderType !== 'video') subtype = renderType as any;
+                }
             } else {
                 coreType = renderType as any;
             }
@@ -274,6 +378,34 @@ const vid_${cleanName} = createVideo("${asset.name}");
 
                 const typeLabel = subtype ? subtype.charAt(0).toUpperCase() + subtype.slice(1) : 'Video';
                 alert(`✅ ${typeLabel} asset created: "${assetName}"`);
+            } else if (coreType === 'text' && (subtype === 'transition' || subtype === 'filter')) {
+                // Handle SCRIPT registration
+                try {
+                    // 1. Compile the JS
+                    const createObj = new Function(js);
+                    const result = createObj();
+
+                    if (!result || typeof result.apply !== 'function' || !result.id || !result.name) {
+                        throw new Error("Script must return an object with { id, name, apply } properties.");
+                    }
+
+                    // 2. Register
+                    if (subtype === 'transition') {
+                        registerTransition(result);
+                        alert(`✅ Registered Custom Transition: "${result.name}"`);
+                    } else {
+                        registerEffect(result);
+                        alert(`✅ Registered Custom Effect: "${result.name}"`);
+                    }
+
+                    // 3. Save as Code Asset
+                    saveCodeAsset(codeAsset);
+                    setSavedAssets(getCodeAssets());
+
+                } catch (e: any) {
+                    throw new Error(`Script Error: ${e.message}`);
+                }
+
             } else {
                 // Render as image
                 const imageUrl = await renderCodeToImage(codeAsset);

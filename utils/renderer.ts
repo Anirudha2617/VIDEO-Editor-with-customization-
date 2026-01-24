@@ -6,6 +6,9 @@ import { TransitionContext } from '../transitions/types';
 import { getEffect } from '../effects/registry';
 import { EffectContext } from '../effects/types';
 
+// --- Reverting Canvas Pool due to rendering artifacts/corruption ---
+// Using fresh canvases ensures no dirty state leaks between frames
+
 export const renderCanvas = (
   ctx: CanvasRenderingContext2D,
   clips: Clip[],
@@ -214,6 +217,8 @@ const renderClip = (
 
   // Local Effects (Clip-level)
   const localFilters: string[] = [];
+  const effectCustomDraws: ((ctx: CanvasRenderingContext2D, width: number, height: number) => void)[] = [];
+
   if (clip.effects) {
     clip.effects.forEach(e => {
       const effectDef = getEffect(e.kind || e.name.toLowerCase());
@@ -226,6 +231,7 @@ const renderClip = (
         };
         const res = effectDef.apply(ctxParams);
         if (res.filter) localFilters.push(res.filter);
+        if (res.customDraw) effectCustomDraws.push(res.customDraw);
       } else {
         localFilters.push(e.value);
       }
@@ -322,6 +328,17 @@ const renderClip = (
       ctx.drawImage(media, -drawW / 2, -drawH / 2, drawW, drawH);
     }
   }
+
+  // Apply Custom Draw Effects
+  if (effectCustomDraws.length > 0) {
+    effectCustomDraws.forEach(draw => {
+      try {
+        draw(ctx, baseW, 720); // Using base resolution for simplicity
+      } catch (e) { console.error(e); }
+    });
+  }
+
+  // Check for TEXT type separately below (it's in an else if)
   else if (clip.type === MediaType.TEXT) {
     const fontSize = clip.fontSize || 60;
     const fontFamily = clip.fontFamily || 'Inter';

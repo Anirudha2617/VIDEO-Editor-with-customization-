@@ -93,12 +93,13 @@ const Player: React.FC<PlayerProps> = ({
     }
   }, [exportStatus, exportSettings, width, height]);
 
-  // Export Logic (Simplified for brevity in this step, logic preserved)
   // Export Logic
   useEffect(() => {
     if (!canvasRef.current) return;
 
     if (exportStatus === 'exporting' && exportSettings) {
+      const startTime = performance.now();
+
       // Clean up any existing recorder first
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         console.log('Stopping previous MediaRecorder');
@@ -233,6 +234,11 @@ const Player: React.FC<PlayerProps> = ({
         recorder.onstop = () => {
           console.log('Recorder stopped. Chunks:', recordedChunksRef.current.length);
 
+          // Stop all tracks to release resources
+          if (recorder.stream) {
+            recorder.stream.getTracks().forEach(track => track.stop());
+          }
+
           // Reconnect audio to speakers after export
           exportClips.forEach(clip => {
             const source = audioSourceNodesRef.current.get(clip.assetId);
@@ -249,19 +255,23 @@ const Player: React.FC<PlayerProps> = ({
               const blob = new Blob(recordedChunksRef.current, { type: fileType });
               console.log('Blob created, size:', blob.size);
 
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `${filename}.${extension}`;
-              document.body.appendChild(a);
-              console.log('Triggering download:', a.download);
-              a.click();
+              if (blob.size > 1000) { // Check for meaningful data size
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${filename}.${extension}`;
+                document.body.appendChild(a);
+                console.log('Triggering download:', a.download);
+                a.click();
 
-              // Clean up after a short delay
-              setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-              }, 100);
+                // Clean up after a short delay
+                setTimeout(() => {
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                }, 100);
+              } else {
+                console.warn('Exported file is too small, likely failed recording.');
+              }
             } catch (err) {
               console.error('Download error:', err);
             }
@@ -269,76 +279,72 @@ const Player: React.FC<PlayerProps> = ({
             console.warn('No chunks recorded, skipping download');
           }
 
-          // Note: We keep the AudioContext open for reuse in subsequent exports
-
           if (onExportFinish) onExportFinish();
         };
 
-        // Start recording without timeslice to ensure we get a single blob on stop (or fewer chunks)
-        // This is often more reliable for short videos or when timeslice causes issues
-        recorder.start();
+        // Use timeslice to ensure data is periodically flushed. 
+        // This is often more reliable than a single huge blob for browser memory.
+        recorder.start(1000);
         mediaRecorderRef.current = recorder;
 
         let exportTime = exportSettings.startTime || 0;
         const endTime = exportSettings.endTime || 0;
         const frameDuration = 1 / fps;
         let frameCount = 0;
-        // Use a slightly faster interval than frame duration to ensure we don't lag behind, 
-        // but not too fast to overwhelm the browser.
-        // Actually, for export we want to be as fast as possible but wait for render.
-        // Since we are using captureStream(fps), the canvas needs to update at that rate.
+
+        // Loop control with drift compensation
+        let expectedTime = performance.now();
         const targetFrameMs = 1000 / fps;
 
         console.log('Export loop starting:', { exportTime, endTime, duration: endTime - exportTime, fps });
-        console.log('Stream active:', combinedStream.active);
-        console.log('Stream tracks:', combinedStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState })));
+
+        // Ensure AudioContext is running (browsers might suspend it)
+        if (audioContext.state === 'suspended') {
+          audioContext.resume();
+        }
 
         const processFrame = () => {
+          // Safety check: if user cancelled or component unmounted
+          if (mediaRecorderRef.current?.state === 'inactive' || exportStatus !== 'exporting') {
+            return;
+          }
+
           if (exportTime >= endTime) {
             console.log(`Export complete: ${frameCount} frames rendered`);
             if (recorder.state !== 'inactive') {
               console.log('Stopping recorder...');
-              recorder.requestData(); // Force any pending data to be emitted
               recorder.stop();
             }
             return;
           }
 
           // 1. Render Video Frame
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            renderCanvas(ctx, clips, assets, mediaCache.current, exportTime, canvas.width, canvas.height);
+          try {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              renderCanvas(ctx, clips, assets, mediaCache.current, exportTime, canvas.width, canvas.height);
+            }
+          } catch (renderErr) {
+            console.error('Render error at', exportTime, renderErr);
+            // Continue despite error to avoid hanging
           }
 
           // 2. Sync Audio
-          // We need to manually advance audio elements to the current export time
-          // and ensure they are playing if they should be audible.
-          // Note: captureStream captures what is playing. If we just seek, it might not capture audio "flow".
-          // Ideally for perfect audio export we should use WebAudio API to schedule buffers, but that's complex.
-          // For now, we try to play the audio elements in sync.
-
           exportClips.forEach(clip => {
             const media = mediaCache.current.get(clip.assetId);
             if (media && (media instanceof HTMLAudioElement || media instanceof HTMLVideoElement)) {
-              // Is this clip active at this exact moment?
               if (exportTime >= clip.start && exportTime < clip.start + clip.duration) {
                 const clipTime = exportTime - clip.start + clip.offset;
 
-                // Sync time if drifted
                 if (Math.abs(media.currentTime - clipTime) > 0.1) {
                   media.currentTime = clipTime;
                 }
 
-                // Ensure playing
                 if (media.paused) {
-                  media.play().catch(e => { }); // Ignore play errors (e.g. waiting for data)
+                  media.play().catch(e => { });
                 }
-
-                // Ensure unmuted (for the stream)
                 media.muted = false;
-                // Volume? We assume 1.0 or clip volume (not yet implemented fully in renderer/types)
               } else {
-                // Not active, pause it
                 if (!media.paused) media.pause();
               }
             }
@@ -352,12 +358,10 @@ const Player: React.FC<PlayerProps> = ({
           exportTime += frameDuration;
           frameCount++;
 
-          // Use setTimeout to control the speed of export. 
-          // We can't go faster than real-time if we rely on media.play() for audio capture!
-          // If we want faster-than-realtime audio export, we MUST use WebAudio OfflineAudioContext, 
-          // but that requires decoding all assets first.
-          // For now, we stick to real-time export to capture audio correctly via MediaStreamDestination.
-          setTimeout(processFrame, targetFrameMs);
+          // Compensate for drift
+          expectedTime += targetFrameMs;
+          let delay = Math.max(0, expectedTime - performance.now());
+          setTimeout(processFrame, delay); // Using calculated delay instead of fixed targetFrameMs
         };
 
         // Start processing
@@ -370,13 +374,14 @@ const Player: React.FC<PlayerProps> = ({
 
     // Cleanup function
     return () => {
+      // Force cleanup if component unmounts or status changes mid-export
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        console.log('Cleaning up MediaRecorder');
+        console.log('Cleanup: Stopping active recorder');
         mediaRecorderRef.current.stop();
-        mediaRecorderRef.current = null;
+        // Tracks will be stopped by onstop handler
       }
     };
-  }, [exportStatus]); // Only depend on exportStatus to prevent infinite loop
+  }, [exportStatus]); // Only depend on exportStatus
 
   // removed misplaced import
 

@@ -104,6 +104,15 @@ export const createExecutionContext = (
                         src: '',
                         subtype: 'animation'
                     };
+                } else if (assetIdOrName.startsWith('fx_')) {
+                    const effectType = assetIdOrName.replace('fx_', '');
+                    asset = {
+                        id: assetIdOrName,
+                        name: effectType.charAt(0).toUpperCase() + effectType.slice(1),
+                        type: MediaType.EFFECT,
+                        src: '',
+                        subtype: 'filter'
+                    };
                 }
             }
 

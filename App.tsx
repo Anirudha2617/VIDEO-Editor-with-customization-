@@ -20,6 +20,12 @@ import { useEditorHistory } from './hooks/useEditorHistory';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAutosave } from './hooks/useAutosave';
 import { loadAutosave } from './services/projectService';
+import { getCodeAssets } from './services/codeAssetStorage';
+import { registerTransition } from './transitions/registry';
+import { registerEffect } from './effects/registry';
+import { getDemoContent } from './utils/demoContent';
+import { saveProjectToFile, loadProjectFromFile } from './services/persistenceService';
+import { FolderOpen } from 'lucide-react';
 
 const INITIAL_TRACKS: Track[] = [
   { id: 't1', type: MediaType.VIDEO, name: 'Video Track 1' },
@@ -69,6 +75,29 @@ function App() {
 
   const { addToHistory, undo, redo, historyIndex, historyLength, initHistory } = useEditorHistory(setClips, setTracks, clips, tracks);
   useEffect(() => { initHistory(); }, []);
+
+  // Initialize Custom Scripts (Transitions/Effects)
+  useEffect(() => {
+    const savedAssets = getCodeAssets();
+    savedAssets.forEach(asset => {
+      if (asset.type === 'text' && (asset.subtype === 'transition' || asset.subtype === 'filter')) {
+        try {
+          // Compile and register
+          const createObj = new Function(asset.js);
+          const result = createObj();
+
+          if (asset.subtype === 'transition') {
+            registerTransition(result);
+          } else if (asset.subtype === 'filter') {
+            registerEffect(result);
+          }
+          console.log(`[App] Registered custom script: ${asset.name}`);
+        } catch (e) {
+          console.error(`[App] Failed to restore script ${asset.name}:`, e);
+        }
+      }
+    });
+  }, []);
 
   // State updates wrapper for history
   const updateClips = (newClips: Clip[]) => {
@@ -214,6 +243,7 @@ function App() {
 
   // Timer Focus Ref
   const timerInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleTogglePlay = () => {
     setIsPlaying(prev => !prev);
@@ -425,11 +455,12 @@ function App() {
 
   const selectedClips = clips.filter(c => selectedClipIds.includes(c.id));
 
-  const handleSaveProject = () => {
+  const handleSaveProject = async () => {
     try {
+      setExportStatus('exporting'); // Show some busy state if needed (optional)
       const project: Project = {
         id: crypto.randomUUID(),
-        name: 'My Project',
+        name: projectName || 'My Project',
         version: '1.0.0',
         lastModified: Date.now(),
         state: {
@@ -444,84 +475,93 @@ function App() {
         }
       };
 
-      const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `lumina-project-${new Date().toISOString().slice(0, 10)}.lumina`;
-      document.body.appendChild(a);
-      a.click();
-
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 100);
+      await saveProjectToFile(project);
 
       // Visual feedback
-      alert('Project saved successfully! Check your downloads folder.');
+      alert('Project saved successfully!');
     } catch (err) {
       console.error('Save project error:', err);
       alert('Failed to save project: ' + (err as Error).message);
+    } finally {
+      setExportStatus('idle');
     }
   };
 
-  const handleLoadProject = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLoadProject = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        const project = JSON.parse(content) as Project;
+    try {
+      const project = await loadProjectFromFile(file);
 
-        // Basic validation
-        if (!project.state || !Array.isArray(project.state.tracks) || !Array.isArray(project.state.clips)) {
-          alert('Invalid project file');
-          return;
-        }
-
-        // Restore state
-        setTracks(project.state.tracks);
-        setClips(project.state.clips);
-        setAssets(project.state.assets);
-        setDuration(project.state.duration);
-        if (project.state.exportSettings) {
-          setExportSettings(project.state.exportSettings);
-        }
-        // Restore canvas dimensions if available (backwards compatibility)
-        if ((project.state as any).canvasWidth) setCanvasWidth((project.state as any).canvasWidth);
-        if ((project.state as any).canvasHeight) setCanvasHeight((project.state as any).canvasHeight);
-
-        if (project.state.customFonts) {
-          setCustomFonts(project.state.customFonts);
-          // Re-inject fonts
-          project.state.customFonts.forEach(font => {
-            const style = document.createElement('style');
-            style.textContent = `
-            @font-face {
-              font-family: '${font.name}';
-              src: url('${font.src}') format('${font.type === 'ttf' ? 'truetype' : 'opentype'}');
-            }
-          `;
-            document.head.appendChild(style);
-          });
-        }
-
-        // Reset selection and history
-        setSelectedClipIds([]);
-        // We might want to clear history or add this load as a history step
-
-      } catch (err) {
-        console.error('Failed to load project:', err);
-        alert('Failed to load project file');
+      // Restore state
+      setTracks(project.state.tracks);
+      setClips(project.state.clips);
+      setAssets(project.state.assets);
+      setDuration(project.state.duration);
+      if (project.state.exportSettings) {
+        setExportSettings(project.state.exportSettings);
       }
-    };
-    reader.readAsText(file);
+      // Restore canvas dimensions if available (backwards compatibility)
+      if ((project.state as any).canvasWidth) setCanvasWidth((project.state as any).canvasWidth);
+      if ((project.state as any).canvasHeight) setCanvasHeight((project.state as any).canvasHeight);
+
+      if (project.state.customFonts) {
+        setCustomFonts(project.state.customFonts);
+        // Re-inject fonts
+        project.state.customFonts.forEach(font => {
+          const style = document.createElement('style');
+          style.textContent = `
+          @font-face {
+            font-family: '${font.name}';
+            src: url('${font.src}') format('${font.type === 'ttf' ? 'truetype' : 'opentype'}');
+          }
+        `;
+          document.head.appendChild(style);
+        });
+      }
+
+      setProjectName(project.name);
+
+      // Reset selection and history
+      setSelectedClipIds([]);
+      // We might want to clear history or add this load as a history step
+      alert('Project loaded successfully!');
+
+    } catch (err) {
+      console.error('Failed to load project:', err);
+      alert('Failed to load project file');
+    }
+
     // Reset input value so same file can be loaded again if needed
     e.target.value = '';
   };
 
+  const handleLoadDemo = () => {
+    const demo = getDemoContent();
+
+    // 1. Register Scripts
+    demo.assets.forEach(a => {
+      if (a.subtype === 'transition' && a.codeSource?.js) {
+        try {
+          const createObj = new Function(a.codeSource.js);
+          registerTransition(createObj());
+        } catch (e) { console.error(e); }
+      } else if (a.subtype === 'filter' && a.codeSource?.js) {
+        try {
+          const createObj = new Function(a.codeSource.js);
+          registerEffect(createObj());
+        } catch (e) { console.error(e); }
+      }
+    });
+
+    // 2. Merge State
+    setAssets(prev => [...prev, ...demo.assets]);
+    setTracks(prev => [...prev, ...demo.tracks]);
+    setClips(prev => [...prev, ...demo.clips]);
+
+    alert("✨ Demo Content Loaded: \n- New 'Demo Track' created\n- Custom Transition 'CircZoom' registered\n- Custom Effect 'Pixelate' registered\n- Cyberpunk assets added");
+  };
 
   // Window Manager State
   interface PanelState {
@@ -645,6 +685,7 @@ function App() {
           onUpdateSettings={setExportSettings}
           onStartExport={startExport}
           onCancelExport={cancelExport}
+          onReset={() => setExportStatus('idle')} // Pass reset function
           isExporting={exportStatus === 'exporting'}
           progress={exportProgress}
           currentTime={currentTime}
@@ -663,6 +704,8 @@ function App() {
           onUpdateClip={handleClipUpdate}
           onRemoveClip={handleDeleteClip}
           onAddAsset={handleAddAsset}
+          selectedClipIds={selectedClipIds}
+          onSelectClip={(id) => setSelectedClipIds([id])}
         />
       );
       case 'preview': return (
@@ -734,8 +777,28 @@ function App() {
           {/* TOOLS */}
           <div className="flex items-center gap-1">
             <div className="flex bg-[var(--bg-item)] rounded-md p-0.5 border border-[var(--border-light)] gap-0.5">
-              <button onClick={undo} disabled={historyIndex <= 0} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all"><Undo2 size={13} /></button>
-              <button onClick={redo} disabled={historyIndex >= historyLength - 1} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all"><Redo2 size={13} /></button>
+              <button onClick={undo} disabled={historyIndex <= 0} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all" title="Undo"><Undo2 size={13} /></button>
+              <button onClick={redo} disabled={historyIndex >= historyLength - 1} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all" title="Redo"><Redo2 size={13} /></button>
+            </div>
+
+            <div className="h-4 w-px bg-white/10 mx-2"></div>
+
+            <div className="flex bg-[var(--bg-item)] rounded-md p-0.5 border border-[var(--border-light)] gap-0.5">
+              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-2 py-1 hover:bg-[var(--bg-hover)] rounded-sm text-gray-200 text-xs font-medium transition-all">
+                <FolderOpen size={13} className="text-blue-400" />
+                <span>Open</span>
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".lumina,.json"
+                onChange={handleLoadProject}
+              />
+              <button onClick={handleSaveProject} className="flex items-center gap-1.5 px-2 py-1 hover:bg-[var(--bg-hover)] rounded-sm text-gray-200 text-xs font-medium transition-all">
+                <Save size={13} className="text-emerald-400" />
+                <span>Save</span>
+              </button>
             </div>
           </div>
         </div>
@@ -771,6 +834,12 @@ function App() {
           <div className="h-4 w-px bg-white/10"></div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleLoadDemo}
+              className="px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 rounded text-[10px] font-bold text-white hover:opacity-90 flex items-center gap-1"
+            >
+              <Sparkles size={12} /> TEST DEMO
+            </button>
             <button onClick={() => {
               // Stress Test Generator
               if (!confirm('This will replace your current timeline with a 5-minute heavy stress test project. Continue?')) return;

@@ -1,15 +1,84 @@
 export interface CodeTemplate {
   name: string;
-  category: 'backgrounds' | 'animations' | 'text' | 'shapes' | 'effects';
+  category: 'backgrounds' | 'animations' | 'text' | 'shapes' | 'effects' | 'scripts';
   description: string;
   html: string;
   css: string;
   js: string;
-  type: 'image' | 'video' | 'text';
+  type: 'image' | 'video' | 'text' | 'script';
+  subtype?: 'transition' | 'effect';
   thumbnail?: string;
 }
 
 export const codeTemplates: CodeTemplate[] = [
+  // SCRIPTS (Transitions & Effects)
+  {
+    name: 'Custom Transition (Wipe)',
+    category: 'scripts',
+    description: 'Custom wipe transition using Canvas API',
+    type: 'script',
+    subtype: 'transition',
+    html: '<!-- No HTML needed for transition scripts -->',
+    css: '/* No CSS needed for transition scripts */',
+    js: `// Custom Transition Definition
+// Must return a Transition object
+return {
+    id: 'custom-wipe-' + Date.now(),
+    name: 'Custom Wipe',
+    variables: [
+        { name: 'Color', key: 'color', type: 'color', defaultValue: '#ff0000' }
+    ],
+    apply: (context) => {
+        const { ctx, width, height, progress, isExit, params } = context;
+        
+        // Example: Circular Wipe
+        const maxRadius = Math.sqrt(width * width + height * height);
+        const p = isExit ? progress : (1 - progress);
+        const radius = maxRadius * p;
+        
+        ctx.fillStyle = params.color || '#000000';
+        
+        ctx.beginPath();
+        ctx.arc(width/2, height/2, radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Return overlay style
+        return {
+            overlayColor: { 
+                style: ctx.fillStyle, 
+                opacity: 0.5 // Mix with opacity
+            }
+        };
+    }
+};`
+  },
+  {
+    name: 'Custom Effect (Sepia)',
+    category: 'scripts',
+    description: 'Custom sepia filter effect',
+    type: 'script',
+    subtype: 'effect',
+    html: '',
+    css: '',
+    js: `// Custom Effect Definition
+return {
+    id: 'custom-sepia-' + Date.now(),
+    name: 'Custom Sepia',
+    variables: [
+        { name: 'Intensity', key: 'intensity', type: 'number', min: 0, max: 1, defaultValue: 1 }
+    ],
+    apply: (context) => {
+        const { params } = context;
+        const intensity = params.intensity || 1;
+        
+        // Return CSS filter
+        return {
+            filter: \`sepia(\${intensity})\`
+        };
+    }
+};`
+  },
+
   // BACKGROUNDS
   {
     name: 'Gradient Background',
@@ -363,7 +432,7 @@ function animate() {
 }
 animate();`
   },
-  // TRANSITIONS
+  // RIPPLE WAS HERE, BUT IS BETTER AS A TEMPLATE VIDEO AS IT WAS
   {
     name: 'Ripple Dissolve',
     category: 'effects',
