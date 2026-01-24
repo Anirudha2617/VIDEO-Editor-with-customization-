@@ -15,7 +15,7 @@ import ShapesPanel from './components/panels/ShapesPanel';
 import TextPanel from './components/panels/TextPanel';
 import ScriptPanel from './components/panels/ScriptPanel';
 import { Asset, Clip, MediaType, Track, ExportSettings, Effect, AnimationType, Project, CustomFont } from './types';
-import { Download, Undo2, Redo2, Save, X } from 'lucide-react';
+import { Download, Undo2, Redo2, Save, X, Sparkles } from 'lucide-react';
 import { useEditorHistory } from './hooks/useEditorHistory';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAutosave } from './hooks/useAutosave';
@@ -247,6 +247,8 @@ function App() {
 
   // Playback
   const lastFrameTime = useRef<number>(0);
+  const [workArea, setWorkArea] = useState<{ start: number; end: number; enabled: boolean }>({ start: 0, end: 30, enabled: false });
+
   const requestRef = useRef<number>();
   const animate = useCallback((time: number) => {
     if (lastFrameTime.current !== 0) {
@@ -256,14 +258,26 @@ function App() {
         if (exportStatus === 'exporting') {
           return prev;
         }
-        const next = prev + deltaTime;
-        if (next >= duration) { setIsPlaying(false); return duration; }
+        let next = prev + deltaTime;
+
+        // Loop Logic
+        if (workArea.enabled) {
+          if (next >= workArea.end) {
+            next = workArea.start;
+          } else if (next < workArea.start && isPlaying) {
+            // If we somehow started before start
+            next = workArea.start;
+          }
+        } else if (next >= duration) {
+          setIsPlaying(false); return duration;
+        }
+
         return next;
       });
     }
     lastFrameTime.current = time;
     if (isPlaying && exportStatus !== 'exporting') requestRef.current = requestAnimationFrame(animate);
-  }, [isPlaying, duration, exportStatus]);
+  }, [isPlaying, duration, exportStatus, workArea]);
 
   useEffect(() => {
     if (isPlaying) { lastFrameTime.current = 0; requestRef.current = requestAnimationFrame(animate); }
@@ -277,7 +291,23 @@ function App() {
     setAssets(prev => prev.map(a => a.id === assetId ? { ...a, ...updates } : a));
   };
   const handleUploadFont = (font: CustomFont) => setCustomFonts(prev => [...prev, font]);
-  const handleDragStart = (e: React.DragEvent, asset: Asset) => {
+  const handleDragStart = (e: React.DragEvent, item: any, type?: string) => {
+    if (type === 'effect') {
+      e.dataTransfer.setData('dragType', 'effect');
+      e.dataTransfer.setData('effectData', JSON.stringify(item));
+      e.dataTransfer.effectAllowed = 'copy';
+      return;
+    }
+    if (type === 'animation') {
+      e.dataTransfer.setData('dragType', 'animation');
+      e.dataTransfer.setData('animationType', item.type);
+      e.dataTransfer.setData('animationData', JSON.stringify(item));
+      e.dataTransfer.effectAllowed = 'copy';
+      return;
+    }
+
+    // Default asset behavior
+    const asset = item as Asset;
     e.dataTransfer.setData('assetId', asset.id);
     e.dataTransfer.setData('dragType', 'asset');
     e.dataTransfer.effectAllowed = 'copy';
@@ -638,6 +668,7 @@ function App() {
             height={canvasHeight}
             selectedClipId={selectedClipIds[0] || null}
             onClipUpdate={handleClipUpdate}
+            workArea={workArea}
           />
         </div>
       );
@@ -662,6 +693,8 @@ function App() {
           onClipMove={(id, start, track) => { setClips(prev => prev.map(c => c.id === id ? { ...c, start, trackId: track } : c)); }}
           onAddTrack={() => setTracks(prev => [...prev, { id: `t${prev.length + 1}`, type: MediaType.VIDEO, name: `Track ${prev.length + 1}` }])}
           onDeleteTrack={(id) => setTracks(prev => prev.filter(t => t.id !== id))}
+          workArea={workArea}
+          onWorkAreaChange={setWorkArea}
         />
       );
       default: return null;
@@ -723,6 +756,72 @@ function App() {
           <div className="h-4 w-px bg-white/10"></div>
 
           <div className="flex items-center gap-2">
+            <button onClick={() => {
+              // Stress Test Generator
+              if (!confirm('This will replace your current timeline with a 5-minute heavy stress test project. Continue?')) return;
+
+              const STRESS_DURATION = 300; // 5 mins
+              const CLIP_DURATION = 3;
+              const TRACK_COUNT = 5;
+              const totalClips = Math.ceil(STRESS_DURATION / CLIP_DURATION) * TRACK_COUNT;
+
+              const newClips: Clip[] = [];
+              // Ensure we have enough tracks
+              const newTracks = [...INITIAL_TRACKS];
+              if (newTracks.length < TRACK_COUNT) {
+                for (let i = newTracks.length; i < TRACK_COUNT; i++) {
+                  newTracks.push({ id: `t${i + 1}`, type: MediaType.VIDEO, name: `Track ${i + 1}` });
+                }
+              }
+              setTracks(newTracks);
+
+              console.log(`Generating ${totalClips} clips for stress test...`);
+
+              for (let i = 0; i < totalClips; i++) {
+                const trackIndex = i % TRACK_COUNT;
+                // Stagger clips so they overlap slightly or just fill
+                // Track 0: 0-3, 3-6
+                // Track 1: 0.5-3.5 (offset)
+                const startTime = Math.floor(i / TRACK_COUNT) * CLIP_DURATION + (trackIndex * 0.5);
+
+                if (startTime > STRESS_DURATION) break;
+
+                const asset = assets[i % assets.length];
+                const hasEffect = Math.random() > 0.5;
+                const hasAnimation = Math.random() > 0.5;
+
+                const clip: Clip = {
+                  id: crypto.randomUUID(),
+                  assetId: asset.id,
+                  trackId: newTracks[trackIndex].id,
+                  start: startTime,
+                  duration: CLIP_DURATION,
+                  offset: 0,
+                  name: `Stress ${i}`,
+                  type: asset.type,
+                  src: asset.src,
+                  scale: 1,
+                  opacity: 1,
+                  x: 0,
+                  y: 0,
+                  rotation: 0,
+                  effects: hasEffect ? [{ id: 'blur', name: 'Blur', type: 'filter', value: 'blur(5px)' }] : [],
+                  animationIn: hasAnimation ? (Math.random() > 0.5 ? 'fade' : 'slide-left') : undefined,
+                  animationDuration: 0.5
+                };
+                newClips.push(clip);
+              }
+
+              setClips(newClips);
+              setDuration(STRESS_DURATION + 5);
+              setWorkArea({ start: 0, end: 10, enabled: true }); // Enable work area to test looping immediately
+              setCurrentTime(0);
+              alert(`Generated ${newClips.length} clips with effects and animations.`);
+
+            }} className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-md text-xs font-medium transition-all border border-red-500/20" title="Run 5-min Stress Test">
+              <Sparkles size={13} /> Stress Test
+            </button>
+
             <button onClick={handleSaveProject} className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-item)] hover:bg-[var(--bg-hover)] text-gray-300 hover:text-white rounded-md text-xs font-medium transition-all border border-[var(--border-light)]">
               <Save size={13} /> Save Project
             </button>

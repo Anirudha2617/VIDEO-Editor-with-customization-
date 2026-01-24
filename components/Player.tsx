@@ -4,6 +4,7 @@ import { Clip, MediaType, Asset, ExportSettings } from '../types';
 import { Play, Pause, SkipBack, SkipForward, Maximize, Minimize } from 'lucide-react';
 import { renderCanvas } from '../utils/renderer';
 import TransformOverlay from './TransformOverlay';
+import { renderCache } from '../services/renderCache';
 
 interface PlayerProps {
   clips: Clip[];
@@ -21,6 +22,7 @@ interface PlayerProps {
   height?: number;
   selectedClipId?: string | null;
   onClipUpdate?: (id: string, updates: Partial<Clip>) => void;
+  workArea?: { start: number; end: number; enabled: boolean };
 }
 
 const Player: React.FC<PlayerProps> = ({
@@ -376,6 +378,17 @@ const Player: React.FC<PlayerProps> = ({
     };
   }, [exportStatus]); // Only depend on exportStatus to prevent infinite loop
 
+  // removed misplaced import
+
+  // ... (inside Player component)
+
+  const [workArea, setWorkArea] = useState<{ start: number; end: number; enabled: boolean }>({ start: 0, end: 30, enabled: false });
+
+  // Invalidate cache when clips change
+  useEffect(() => {
+    renderCache.clear();
+  }, [clips, assets]);
+
   // Render Loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -383,59 +396,30 @@ const Player: React.FC<PlayerProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Smart Caching Check
+    const dependencyHash = `${clips.length}-${selectedClipId || ''}-${canvas.width}x${canvas.height}`;
+
+    if (exportStatus === 'idle' && renderCache.has(currentTime, dependencyHash)) {
+      const cachedFrame = renderCache.get(currentTime, dependencyHash);
+      if (cachedFrame) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(cachedFrame, 0, 0);
+        return;
+      }
+    }
+
     renderCanvas(ctx, clips, assets, mediaCache.current, currentTime, canvas.width, canvas.height);
 
-  }, [currentTime, clips, isReady, exportStatus, assets]);
+    // Save to Cache (if idle and not exporting)
+    if (exportStatus === 'idle') {
+      createImageBitmap(canvas).then(bitmap => {
+        renderCache.set(currentTime, dependencyHash, bitmap);
+      });
+    }
+
+  }, [currentTime, clips, isReady, exportStatus, assets, selectedClipId]);
 
   // Audio/Video Playback Synchronization
-  useEffect(() => {
-    if (!isReady || exportStatus === 'exporting') return;
-
-    // Get all active clips at current time
-    const activeClips = clips.filter(
-      clip => currentTime >= clip.start && currentTime < clip.start + clip.duration
-    );
-
-    // Sync all media elements
-    mediaCache.current.forEach((media, assetId) => {
-      if (media instanceof HTMLVideoElement || media instanceof HTMLAudioElement) {
-        // Find if this media is active
-        const activeClip = activeClips.find(c => c.assetId === assetId);
-
-        if (activeClip) {
-          const clipTime = currentTime - activeClip.start + activeClip.offset;
-
-          // Sync the current time if it's off by more than 0.3 seconds
-          if (Math.abs(media.currentTime - clipTime) > 0.3) {
-            media.currentTime = clipTime;
-          }
-
-          // Mute videos that have been audio-detached
-          if (media instanceof HTMLVideoElement && activeClip.hasAudio === false) {
-            media.muted = true;
-          }
-
-          // Play/pause based on isPlaying state
-          if (isPlaying) {
-            if (media.paused) {
-              media.play().catch(err => console.log('Play failed:', err));
-            }
-          } else {
-            if (!media.paused) {
-              media.pause();
-            }
-          }
-        } else {
-          // Not active, ensure it's paused
-          if (!media.paused) {
-            media.pause();
-          }
-        }
-      }
-    });
-  }, [currentTime, isPlaying, clips, isReady, exportStatus]);
-
-  // Mute audio during export
   useEffect(() => {
     mediaCache.current.forEach((media) => {
       if (media instanceof HTMLVideoElement || media instanceof HTMLAudioElement) {

@@ -12,7 +12,7 @@ interface TimelineClipProps {
     onResizeStart: (e: React.MouseEvent, clipId: string) => void;
 }
 
-export const TimelineClip: React.FC<TimelineClipProps> = ({ clip, isSelected, zoom, onDragStart, onClick, onResizeStart }) => {
+const TimelineClipComponent: React.FC<TimelineClipProps> = ({ clip, isSelected, zoom, onDragStart, onClick, onResizeStart }) => {
 
     const getBaseClasses = () => {
         if (clip.type === MediaType.EFFECT) return `z-30 bg-pink-900/30 border-pink-500/50 ${isSelected ? 'ring-2 ring-white' : 'hover:ring-1 hover:ring-white/50'}`;
@@ -122,3 +122,5 @@ export const TimelineClip: React.FC<TimelineClipProps> = ({ clip, isSelected, zo
         </div>
     );
 };
+
+export const TimelineClip = React.memo(TimelineClipComponent);

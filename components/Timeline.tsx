@@ -23,6 +23,9 @@ interface TimelineProps {
     onZoomChange: (newZoom: number) => void;
     onClipMove: (clipId: string, newStart: number, newTrackId: string) => void;
     onAddTrack: () => void;
+    onDeleteTrack?: (id: string) => void;
+    workArea?: { start: number; end: number; enabled: boolean };
+    onWorkAreaChange?: (area: { start: number; end: number; enabled: boolean }) => void;
 }
 
 const Timeline: React.FC<TimelineProps> = ({
@@ -43,7 +46,10 @@ const Timeline: React.FC<TimelineProps> = ({
     onDeleteClip,
     onZoomChange,
     onClipMove,
-    onAddTrack
+    onAddTrack,
+    onDeleteTrack,
+    workArea,
+    onWorkAreaChange
 }) => {
     const rulerRef = useRef<HTMLDivElement>(null);
     const timelineRef = useRef<HTMLDivElement>(null);
@@ -85,18 +91,30 @@ const Timeline: React.FC<TimelineProps> = ({
         const dragType = e.dataTransfer.getData('dragType');
 
         if (dragType === 'effect' && targetClipId) {
-            const effectData = JSON.parse(e.dataTransfer.getData('effectData'));
-            const targetClip = clips.find(c => c.id === targetClipId);
-            if (targetClip) onClipUpdate(targetClipId, { effects: [...(targetClip.effects || []), effectData] });
+            try {
+                const effectData = JSON.parse(e.dataTransfer.getData('effectData'));
+                const targetClip = clips.find(c => c.id === targetClipId);
+                if (targetClip && effectData && effectData.type) {
+                    onClipUpdate(targetClipId, { effects: [...(targetClip.effects || []), effectData] });
+                }
+            } catch (err) {
+                console.error('Failed to parse effect data:', err);
+            }
             return;
         }
 
         if (dragType === 'animation' && targetClipId) {
-            const animType = e.dataTransfer.getData('animationType') as AnimationType;
-            const rawData = e.dataTransfer.getData('animationData');
-            let duration = 1.0;
-            if (rawData) duration = JSON.parse(rawData).duration || 1.0;
-            onClipUpdate(targetClipId, { animationIn: animType, animationInDuration: duration });
+            try {
+                const animType = e.dataTransfer.getData('animationType') as AnimationType;
+                const rawData = e.dataTransfer.getData('animationData');
+                let duration = 1.0;
+                if (rawData) duration = JSON.parse(rawData).duration || 1.0;
+                if (animType) {
+                    onClipUpdate(targetClipId, { animationIn: animType, animationInDuration: duration });
+                }
+            } catch (err) {
+                console.error('Failed to parse animation data:', err);
+            }
             return;
         }
 
@@ -111,19 +129,36 @@ const Timeline: React.FC<TimelineProps> = ({
             const clipId = e.dataTransfer.getData('clipId');
             onClipMove(clipId, time, trackId);
         } else if (dragType === 'effect') {
-            const effectData = JSON.parse(e.dataTransfer.getData('effectData'));
-            onCreateEffectClip(effectData, trackId, time);
+            try {
+                const effectData = JSON.parse(e.dataTransfer.getData('effectData'));
+                if (effectData && effectData.type) {
+                    onCreateEffectClip(effectData, trackId, time);
+                }
+            } catch (err) {
+                console.error('Failed to parse effect creation data:', err);
+            }
         } else if (dragType === 'animation') {
-            const animType = e.dataTransfer.getData('animationType') as AnimationType;
-            const rawData = e.dataTransfer.getData('animationData');
-            onCreateAnimationClip(animType, trackId, time, rawData ? JSON.parse(rawData) : {});
+            try {
+                const animType = e.dataTransfer.getData('animationType') as AnimationType;
+                const rawData = e.dataTransfer.getData('animationData');
+                if (animType) {
+                    onCreateAnimationClip(animType, trackId, time, rawData ? JSON.parse(rawData) : {});
+                }
+            } catch (err) {
+                console.error('Failed to parse animation creation data:', err);
+            }
         } else if (dragType === 'shape') {
-            const shapeDataStr = e.dataTransfer.getData('text/plain'); // Use standard MIME type
-            console.log('[Timeline] Shape drop received:', shapeDataStr);
-            const shapeData = JSON.parse(shapeDataStr);
-            console.log('[Timeline] Parsed shape data:', shapeData);
-            console.log('[Timeline] Calling onDropAsset with:', shapeData.id, trackId, time);
-            onDropAsset(shapeData.id, trackId, time);
+            try {
+                const shapeDataStr = e.dataTransfer.getData('text/plain'); // Use standard MIME type
+                if (shapeDataStr) {
+                    const shapeData = JSON.parse(shapeDataStr);
+                    if (shapeData && shapeData.id) {
+                        onDropAsset(shapeData.id, trackId, time);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to parse shape data:', err);
+            }
         } else {
             const assetId = e.dataTransfer.getData('assetId');
             if (assetId) onDropAsset(assetId, trackId, time);
@@ -340,15 +375,101 @@ const Timeline: React.FC<TimelineProps> = ({
         handleDrop(e);
     };
 
+    // Work Area Logic
+    const [isDraggingWorkArea, setIsDraggingWorkArea] = useState<'start' | 'end' | 'bar' | null>(null);
+    const workAreaRef = useRef<{ start: number, end: number, initialX: number } | null>(null);
+
+    const handleWorkAreaMouseDown = (e: React.MouseEvent, type: 'start' | 'end' | 'bar') => {
+        e.stopPropagation();
+        e.preventDefault();
+        setIsDraggingWorkArea(type);
+        if (onWorkAreaChange && workArea) {
+            workAreaRef.current = { start: workArea.start, end: workArea.end, initialX: e.clientX };
+        }
+    };
+
+    useEffect(() => {
+        const handleWorkAreaMove = (e: MouseEvent) => {
+            if (isDraggingWorkArea && workAreaRef.current && onWorkAreaChange && workArea) {
+                const deltaX = e.clientX - workAreaRef.current.initialX;
+                const deltaSeconds = deltaX / zoom;
+
+                if (isDraggingWorkArea === 'bar') {
+                    let newStart = Math.max(0, workAreaRef.current.start + deltaSeconds);
+                    let newEnd = Math.max(0, workAreaRef.current.end + deltaSeconds);
+                    onWorkAreaChange({ ...workArea, start: newStart, end: newEnd, enabled: true });
+                } else if (isDraggingWorkArea === 'start') {
+                    let newStart = Math.max(0, Math.min(workArea.end - 0.1, workAreaRef.current.start + deltaSeconds));
+                    onWorkAreaChange({ ...workArea, start: newStart, enabled: true });
+                } else if (isDraggingWorkArea === 'end') {
+                    let newEnd = Math.max(workArea.start + 0.1, workAreaRef.current.end + deltaSeconds);
+                    onWorkAreaChange({ ...workArea, end: newEnd, enabled: true });
+                }
+            }
+        };
+
+        const handleWorkAreaUp = () => {
+            setIsDraggingWorkArea(null);
+            workAreaRef.current = null;
+        };
+
+        if (isDraggingWorkArea) {
+            window.addEventListener('mousemove', handleWorkAreaMove);
+            window.addEventListener('mouseup', handleWorkAreaUp);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleWorkAreaMove);
+            window.removeEventListener('mouseup', handleWorkAreaUp);
+        };
+    }, [isDraggingWorkArea, onWorkAreaChange, zoom, workArea]);
+
+
+
+    // Virtualization State
+    const [visibleRange, setVisibleRange] = useState({ start: 0, end: 100 });
+
+    const updateVisibleRange = () => {
+        if (!timelineRef.current) return;
+        const scrollLeft = timelineRef.current.scrollLeft;
+        const containerWidth = timelineRef.current.clientWidth;
+
+        // Calculate time range with buffer (e.g., 10% extra or 200px)
+        const bufferPixels = 500;
+        const startPixel = Math.max(0, scrollLeft - bufferPixels);
+        const endPixel = scrollLeft + containerWidth + bufferPixels;
+
+        const start = startPixel / zoom;
+        const end = endPixel / zoom;
+
+        setVisibleRange({ start, end });
+    };
+
+    useEffect(() => {
+        updateVisibleRange();
+        window.addEventListener('resize', updateVisibleRange);
+        return () => window.removeEventListener('resize', updateVisibleRange);
+    }, [zoom]); // Update when zoom changes
+
     return (
         <div className="flex flex-col h-full bg-[var(--bg-root)] text-xs select-none relative group">
-            {/* Toolbar */}
+            {/* Toolbar - Added Work Area Toggle */}
             <div className="h-10 bg-[var(--bg-header)]/90 backdrop-blur-md border-t border-[var(--border-base)] flex items-center justify-between px-3 z-40 relative">
                 <div className="flex items-center gap-1 bg-[var(--bg-item)] p-0.5 rounded-lg border border-[var(--border-light)]">
+                    {/* Existing buttons... */}
                     <button onClick={onAddTrack} className="flex items-center gap-1.5 px-2 py-1 rounded-sm hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-white transition-all text-[10px] font-medium"><Plus size={11} /> Track</button>
                     <div className="h-3 w-px bg-white/10 mx-1" />
                     <button onClick={onSplitClip} className="flex items-center gap-1.5 px-2 py-1 rounded-sm hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-white transition-all text-[10px] font-medium" title="Split (S)"><Scissors size={11} /> Split</button>
                     <button onClick={onDeleteClip} className="flex items-center gap-1.5 px-2 py-1 rounded-sm hover:bg-red-500/10 text-[var(--text-secondary)] hover:text-red-400 transition-all text-[10px] font-medium" title="Delete (Del)"><Trash2 size={11} /> Delete</button>
+                    <div className="h-3 w-px bg-white/10 mx-1" />
+                    {workArea && onWorkAreaChange && (
+                        <button
+                            onClick={() => onWorkAreaChange({ ...workArea, enabled: !workArea.enabled })}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-sm transition-all text-[10px] font-medium ${workArea.enabled ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-[var(--bg-hover)] text-[var(--text-secondary)]'}`}
+                            title="Toggle Work Area Loop"
+                        >
+                            <span className="text-[10px]">Loop</span>
+                        </button>
+                    )}
                 </div>
                 <div className="flex items-center gap-2 bg-[var(--bg-item)] p-0.5 rounded-lg border border-[var(--border-light)]">
                     <button onClick={() => onZoomChange(Math.max(10, zoom - 50))} className="p-1 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white transition"><ZoomOut size={11} /></button>
@@ -358,17 +479,53 @@ const Timeline: React.FC<TimelineProps> = ({
             </div>
 
             <div className="flex-1 flex flex-col overflow-hidden relative">
-                <div className="flex-1 overflow-auto bg-[var(--bg-root)] relative custom-scrollbar" ref={timelineRef} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDrop={wrapHandleDrop} onClick={handleTimelineClick} onDragEnd={handleDragEnd}>
+                <div
+                    className="flex-1 overflow-auto bg-[var(--bg-root)] relative custom-scrollbar"
+                    ref={timelineRef}
+                    onDragOver={handleDragOver}
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    onDrop={wrapHandleDrop}
+                    onClick={handleTimelineClick}
+                    onDragEnd={handleDragEnd}
+                    onScroll={updateVisibleRange}
+                >
                     <div className="flex h-8 bg-[var(--bg-panel)] min-w-max sticky top-0 z-30 border-b border-[var(--border-base)]">
                         <div className="w-[200px] border-r border-[var(--border-base)] bg-[var(--bg-panel)] z-40 sticky left-0 flex items-center justify-center">
                             <div className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-widest">Tracks</div>
                         </div>
-                        <div className="relative h-full cursor-pointer overflow-hidden pt-2" style={{ width: duration * zoom }} ref={rulerRef}>{renderRulerTicks()}</div>
+                        <div className="relative h-full cursor-pointer overflow-hidden pt-2" style={{ width: duration * zoom }} ref={rulerRef}>
+                            {/* Work Area Bar */}
+                            {workArea && workArea.enabled && (
+                                <div className="absolute top-0 h-2 bg-blue-500/20 border-b border-blue-500/50 z-20 group/wa" style={{ left: workArea.start * zoom, width: (workArea.end - workArea.start) * zoom }}>
+                                    {/* Bar Drag Handle */}
+                                    <div className="absolute inset-x-0 top-0 h-full cursor-grab active:cursor-grabbing hover:bg-blue-500/30" onMouseDown={(e) => handleWorkAreaMouseDown(e, 'bar')} />
+                                    {/* Left Handle */}
+                                    <div className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-blue-500 hover:bg-blue-400 rounded-l-sm" onMouseDown={(e) => handleWorkAreaMouseDown(e, 'start')} />
+                                    {/* Right Handle */}
+                                    <div className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-blue-500 hover:bg-blue-400 rounded-r-sm" onMouseDown={(e) => handleWorkAreaMouseDown(e, 'end')} />
+                                    <div className="absolute top-full left-0 mt-0.5 text-[9px] text-blue-400 font-mono bg-black/60 px-1 rounded opacity-0 group-hover/wa:opacity-100 pointer-events-none whitespace-nowrap">
+                                        Work Area: {formatTime(workArea.start)} - {formatTime(workArea.end)}
+                                    </div>
+                                </div>
+                            )}
+                            {renderRulerTicks()}
+                        </div>
                     </div>
+                    {/* ... (rest of timeline body) */}
                     <div className="relative min-w-max pb-8">
                         {zoom > 50 && <div className="absolute inset-0 pointer-events-none z-0" style={{ left: 200, width: duration * zoom, backgroundImage: 'linear-gradient(to right, var(--border-base) 1px, transparent 1px)', backgroundSize: `${zoom}px 100%`, opacity: 0.1 }} />}
 
+                        {/* Dim outside work area if enabled */}
+                        {workArea && workArea.enabled && (
+                            <>
+                                <div className="absolute top-0 bottom-0 bg-black/40 pointer-events-none z-10" style={{ left: 200, width: workArea.start * zoom }} />
+                                <div className="absolute top-0 bottom-0 bg-black/40 pointer-events-none z-10" style={{ left: 200 + (workArea.end * zoom), width: (duration - workArea.end) * zoom }} />
+                            </>
+                        )}
+
                         {tracks.map((track, index) => (
+                            // ... (track rendering)
                             <div key={track.id} data-track-id={track.id} className={`flex h-24 border-b border-[var(--border-base)] ${index % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.01]'} relative group/track transition-colors hover:bg-white/[0.02]`}>
                                 <div className="w-[200px] flex-shrink-0 bg-[var(--bg-panel)] border-r border-[var(--border-base)] p-3 flex flex-col justify-center gap-1 z-20 sticky left-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)]">
                                     <div className="flex items-center gap-3 text-[var(--text-secondary)] group-hover/track:text-gray-200 transition-colors">
@@ -377,7 +534,7 @@ const Timeline: React.FC<TimelineProps> = ({
                                     </div>
                                 </div>
                                 <div className="relative py-2" style={{ width: duration * zoom }}>
-                                    {sortClipsForRender(clips.filter(c => c.trackId === track.id)).map(clip => (
+                                    {sortClipsForRender(clips.filter(c => c.trackId === track.id && (c.start + c.duration >= visibleRange.start && c.start <= visibleRange.end))).map(clip => (
                                         <TimelineClip
                                             key={clip.id}
                                             clip={clip}
