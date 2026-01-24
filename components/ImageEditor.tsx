@@ -25,8 +25,11 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ src, onSave, onCancel }) => {
 
     useEffect(() => {
         const img = new Image();
+        // Enable CORS for remote headers to prevent Tainted Canvas security errors
+        if (src.startsWith('http://') || src.startsWith('https://')) {
+            img.crossOrigin = "anonymous";
+        }
         img.src = src;
-        // Removed crossOrigin to allow local file URLs
         img.onload = () => setImage(img);
         img.onerror = () => {
             console.error('Failed to load image:', src);
@@ -36,7 +39,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ src, onSave, onCancel }) => {
 
     useEffect(() => {
         drawPreview();
-    }, [image, rotation, flipH, flipV, crop]);
+    }, [image, rotation, flipH, flipV]);
 
     // Handle Dragging Logic for Crop Box
     const handleMouseDown = (e: React.MouseEvent, type: 'move' | 'nw' | 'ne' | 'sw' | 'se') => {
@@ -85,56 +88,102 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ src, onSave, onCancel }) => {
     const handleMouseUp = () => setIsDragging(null);
 
     const drawPreview = () => {
-        // Just triggers re-render of overlay; actual image rendering is CSS based for simplicity until save
-        // But for "Save" we use canvas
+        if (!image || !canvasRef.current) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Ensure image is ready
+        if (!image.complete) {
+            image.onload = () => drawPreview();
+            return;
+        }
+
+        // Use rAF to ensure we draw when ready, preventing race conditions
+        requestAnimationFrame(() => {
+            if (!image || !canvasRef.current) return; // Re-check inside frame
+
+            // 1. Calculate dimensions after rotation
+            const isRotated90 = Math.abs(rotation) % 180 !== 0; // 90 or 270
+            const cw = isRotated90 ? image.naturalHeight : image.naturalWidth;
+            const ch = isRotated90 ? image.naturalWidth : image.naturalHeight;
+
+            canvas.width = cw;
+            canvas.height = ch;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Transform Context
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate((rotation * Math.PI) / 180);
+            ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+
+            // 3. Draw Image
+            ctx.drawImage(
+                image,
+                -image.naturalWidth / 2,
+                -image.naturalHeight / 2
+            );
+            ctx.restore();
+        });
     };
 
     const handleSave = () => {
         if (!image) return;
 
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
 
-        // 1. Calculate dimensions after rotation
-        const isRotated90 = Math.abs(rotation) % 180 !== 0; // 90 or 270
-        const cw = isRotated90 ? image.naturalHeight : image.naturalWidth;
-        const ch = isRotated90 ? image.naturalWidth : image.naturalHeight;
+            // 1. Calculate dimensions after rotation
+            const isRotated90 = Math.abs(rotation) % 180 !== 0; // 90 or 270
+            const cw = isRotated90 ? image.naturalHeight : image.naturalWidth;
+            const ch = isRotated90 ? image.naturalWidth : image.naturalHeight;
 
-        canvas.width = cw;
-        canvas.height = ch;
+            canvas.width = cw;
+            canvas.height = ch;
 
-        // 2. Transform Context
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((rotation * Math.PI) / 180);
-        ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+            // 2. Transform Context
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate((rotation * Math.PI) / 180);
+            ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
 
-        // 3. Draw Image to fit base + rotation
-        ctx.drawImage(
-            image,
-            -image.naturalWidth / 2,
-            -image.naturalHeight / 2
-        );
-
-        // 4. Handle Crop (Create new canvas for cropping)
-        const cropCanvas = document.createElement('canvas');
-        cropCanvas.width = cw * crop.w;
-        cropCanvas.height = ch * crop.h;
-        const cropCtx = cropCanvas.getContext('2d');
-
-        if (cropCtx) {
-            cropCtx.drawImage(
-                canvas,
-                cw * crop.x, ch * crop.y, cw * crop.w, ch * crop.h, // Source
-                0, 0, cropCanvas.width, cropCanvas.height // Dest
+            // 3. Draw Image to fit base + rotation
+            ctx.drawImage(
+                image,
+                -image.naturalWidth / 2,
+                -image.naturalHeight / 2
             );
 
-            // 5. Export
-            cropCanvas.toBlob((blob) => {
-                if (blob) {
-                    onSave(URL.createObjectURL(blob));
-                }
-            }, 'image/png');
+            // 4. Handle Crop (Create new canvas for cropping)
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = cw * crop.w;
+            cropCanvas.height = ch * crop.h;
+            const cropCtx = cropCanvas.getContext('2d');
+
+            if (cropCtx) {
+                cropCtx.drawImage(
+                    canvas,
+                    cw * crop.x, ch * crop.y, cw * crop.w, ch * crop.h, // Source
+                    0, 0, cropCanvas.width, cropCanvas.height // Dest
+                );
+
+                // 5. Export
+                cropCanvas.toBlob((blob) => {
+                    if (blob) {
+                        onSave(URL.createObjectURL(blob));
+                    } else {
+                        console.error('Failed to create blob from canvas');
+                    }
+                }, 'image/png');
+            }
+        } catch (error) {
+            console.error('Failed to save edited image (Tainted Canvas?):', error);
+            alert('Failed to save image. Cross-origin security restriction.');
         }
     };
 
@@ -147,9 +196,20 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ src, onSave, onCancel }) => {
 
     if (!image) return <div className="flex items-center justify-center h-full text-white">Loading...</div>;
 
+    // Calculate auto-scale to fit rotated image within container
+    // If rotated 90/270, the "Visual Height" becomes the "Layout Width".
+    // We need to ensure Visual Height <= Container Height (approx equal to Max Layout Height).
+    // A safe heuristic is scaling by the aspect ratio if landscape.
+    let fitScale = 1;
+    if (Math.abs(rotation) % 180 !== 0 && image) {
+        if (image.naturalWidth > image.naturalHeight) {
+            fitScale = image.naturalHeight / image.naturalWidth;
+        }
+    }
+
     // Apply CSS transforms for visual preview
     const previewStyle = {
-        transform: `rotate(${rotation}deg) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
+        transform: `rotate(${rotation}deg) scale(${fitScale}) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
         transition: isDragging ? 'none' : 'transform 0.3s ease',
         maxWidth: '100%',
         maxHeight: '100%',
@@ -180,45 +240,43 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ src, onSave, onCancel }) => {
                 <div className="flex-1 overflow-hidden relative bg-[#09090b] flex items-center justify-center p-8 select-none">
                     {/* Image Container */}
                     <div ref={containerRef} className="relative inline-block border border-gray-700 shadow-xl" style={{ maxHeight: '100%', maxWidth: '100%' }}>
-                        {/* Actual Image */}
-                        <img
-                            src={src}
-                            style={previewStyle}
-                            className="max-h-[450px] object-contain block" // limit height explicitly
+                        {/* Preview Canvas */}
+                        <canvas
+                            ref={canvasRef} // Reusing canvasRef for the preview as well? No, need separate ref. Let's use a new one.
+                            style={{
+                                maxWidth: '100%',
+                                maxHeight: '380px',
+                                display: 'block',
+                                backgroundColor: 'black'
+                            }}
                             draggable={false}
                         />
 
-                        {/* Crop Overlay - ABSOLUTE positioning over the container */}
-                        {/* Note: This simplistic overlay works best when rotation is 0. 
-                            If rotated, the logical overlay needs to rotate too.
-                            For MVP, we disable crop interaction while rotated to avoid complex math.
-                        */}
-                        {rotation === 0 && (
-                            <div
-                                className="absolute border-2 border-white box-content shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
-                                style={{
-                                    left: `${crop.x * 100}%`,
-                                    top: `${crop.y * 100}%`,
-                                    width: `${crop.w * 100}%`,
-                                    height: `${crop.h * 100}%`,
-                                    cursor: isDragging ? 'grabbing' : 'move'
-                                }}
-                                onMouseDown={(e) => handleMouseDown(e, 'move')}
-                            >
-                                {/* Grid Lines */}
-                                <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-50">
-                                    <div className="border-r border-b border-white/30" /><div className="border-r border-b border-white/30" /><div className="border-b border-white/30" />
-                                    <div className="border-r border-b border-white/30" /><div className="border-r border-b border-white/30" /><div className="border-b border-white/30" />
-                                    <div className="border-r border-white/30" /><div className="border-r border-white/30" /><div />
-                                </div>
-
-                                {/* Resize Handles */}
-                                <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border border-black cursor-nw-resize" onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'nw'); }} />
-                                <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border border-black cursor-ne-resize" onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'ne'); }} />
-                                <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border border-black cursor-sw-resize" onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'sw'); }} />
-                                <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border border-black cursor-se-resize" onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'se'); }} />
+                        {/* Crop Overlay */}
+                        <div
+                            className="absolute border-2 border-white box-content shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+                            style={{
+                                left: `${crop.x * 100}%`,
+                                top: `${crop.y * 100}%`,
+                                width: `${crop.w * 100}%`,
+                                height: `${crop.h * 100}%`,
+                                cursor: isDragging ? 'grabbing' : 'move'
+                            }}
+                            onMouseDown={(e) => handleMouseDown(e, 'move')}
+                        >
+                            {/* Grid Lines */}
+                            <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-50">
+                                <div className="border-r border-b border-white/30" /><div className="border-r border-b border-white/30" /><div className="border-b border-white/30" />
+                                <div className="border-r border-b border-white/30" /><div className="border-r border-b border-white/30" /><div className="border-b border-white/30" />
+                                <div className="border-r border-white/30" /><div className="border-r border-white/30" /><div />
                             </div>
-                        )}
+
+                            {/* Resize Handles */}
+                            <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border border-black cursor-nw-resize" onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'nw'); }} />
+                            <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border border-black cursor-ne-resize" onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'ne'); }} />
+                            <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border border-black cursor-sw-resize" onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'sw'); }} />
+                            <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border border-black cursor-se-resize" onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'se'); }} />
+                        </div>
                     </div>
                 </div>
 
@@ -241,7 +299,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ src, onSave, onCancel }) => {
                                 <FlipVertical size={16} />
                             </button>
                         </div>
-                        {rotation !== 0 && <span className="text-[10px] text-yellow-500 flex items-center gap-1">⚠️ Reset rotation to crop</span>}
+
                     </div>
 
                     <button

@@ -30,30 +30,42 @@ const base64ToBlob = async (dataUrl: string): Promise<Blob> => {
 /**
  * Serializes an asset by converting blob URLs to embedded Base64 data.
  */
+/**
+ * Serializes an asset by converting blob URLs AND external URLs to embedded Base64 data.
+ */
 const serializeAsset = async (asset: Asset): Promise<Asset> => {
-    // If it's a blob URL (local file), we need to fetch and embed it
+    // 1. Local Blob URLs
     if (asset.src.startsWith('blob:')) {
         try {
             const response = await fetch(asset.src);
             const blob = await response.blob();
             const base64 = await blobToBase64(blob);
-
-            // Return new asset with embedded data
-            // We keep the original 'src' as is for reference, or maybe we clear it? 
-            // When loading, we will regenerate a blob URL.
-            // Let's store the data in a new optional property 'data' if strictly needed, 
-            // but modifying 'src' to be the data URL is the standard portable way for web.
-            return {
-                ...asset,
-                src: base64 // Replace blob: URL with data: URL
-            };
+            return { ...asset, src: base64 };
         } catch (e) {
-            console.warn(`[Persistence] Failed to serialize asset ${asset.id}:`, e);
-            return asset; // Return original if failure
+            console.warn(`[Persistence] Failed to serialize blob asset ${asset.id}:`, e);
+            return asset;
         }
     }
 
-    // If it's already a data URL or external URL (http), leave it
+    // 2. External HTTP/HTTPS URLs (freeze dynamic assets like Picsum)
+    if (asset.src.startsWith('http://') || asset.src.startsWith('https://')) {
+        try {
+            // Attempt to fetch the external resource
+            const response = await fetch(asset.src, { mode: 'cors' }); // Ensure CORS
+            if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
+
+            const blob = await response.blob();
+            const base64 = await blobToBase64(blob);
+            return { ...asset, src: base64 };
+        } catch (e) {
+            // If CORS fails or fetch errors, fallback to original URL (better than losing it)
+            // But warn the user/console.
+            console.warn(`[Persistence] Could not embed external asset ${asset.id} (${asset.src}). It may strictly enforce CORS or be unreachable. Saving as reference URL instead.`, e);
+            return asset;
+        }
+    }
+
+    // 3. Already Data URL or other
     return asset;
 };
 

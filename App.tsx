@@ -457,7 +457,7 @@ function App() {
 
   const handleSaveProject = async () => {
     try {
-      setExportStatus('exporting'); // Show some busy state if needed (optional)
+      // setExportStatus('exporting'); // Removed to prevent triggering video export logic
       const project: Project = {
         id: crypto.randomUUID(),
         name: projectName || 'My Project',
@@ -797,7 +797,7 @@ function App() {
               />
               <button onClick={handleSaveProject} className="flex items-center gap-1.5 px-2 py-1 hover:bg-[var(--bg-hover)] rounded-sm text-gray-200 text-xs font-medium transition-all">
                 <Save size={13} className="text-emerald-400" />
-                <span>Save</span>
+                <span>Save Project</span>
               </button>
             </div>
           </div>
