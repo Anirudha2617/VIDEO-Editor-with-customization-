@@ -59,6 +59,7 @@ export interface Effect {
 
 export interface Clip {
   id: string;
+  groupId?: string | null;
   assetId: string;
   trackId: string;
   start: number; // Start time on the timeline (seconds)
