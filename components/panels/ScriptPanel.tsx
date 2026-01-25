@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
-import { Play, RefreshCw, Terminal, FileJson, GripVertical } from 'lucide-react';
+import { Play, RefreshCw, Terminal, FileJson, GripVertical, Sparkles, Key, Loader } from 'lucide-react';
 import { Clip, Track, Asset } from '../../types';
 import { createExecutionContext } from '../../services/scriptExecutionContext';
 import { generateTimelineState, parseTimelineState } from '../../services/timelineStateGenerator';
+import { getApiKey, setApiKey, hasApiKey } from '../../services/apiKeyService';
+import { generateTimelineScript } from '../../services/geminiService';
 
 interface ScriptPanelProps {
     tracks: Track[];
@@ -39,10 +41,18 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     const monacoRef = useRef<any>(null);
     const isSyncingSelection = useRef(false);
 
+    // Panel 3: AI Assistant
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiApiKey, setAiApiKey] = useState(getApiKey() || '');
+    const [showApiKeyInput, setShowApiKeyInput] = useState(!hasApiKey());
+    const [isGenerating, setIsGenerating] = useState(false);
+
     // UI State
     const [executing, setExecuting] = useState(false);
-    const [dividerPos, setDividerPos] = useState(40); // Percentage
+    const [dividerPos, setDividerPos] = useState(25); // Percentage - reduced to make room for AI
     const [isDragging, setIsDragging] = useState(false);
+    const [divider2Pos, setDivider2Pos] = useState(55); // Second divider
+    const [isDragging2, setIsDragging2] = useState(false);
 
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -146,6 +156,17 @@ declare function removeClip(id: string): void;
 declare function updateClip(id: string, updates: any): void;
 declare function getClip(id: string): any;
 
+// Text Asset Creation
+declare function addTextAsset(text: string, options?: {
+    fontSize?: number;
+    fontColor?: string;
+    fontFamily?: string;
+    isBold?: boolean;
+    backgroundColor?: string;
+    borderRadius?: number;
+    padding?: number;
+}): { id: string; name: string; type: string };
+
 // Effect Operations
 declare function addEffect(clipId: string, effect: {
     name: string;
@@ -153,6 +174,14 @@ declare function addEffect(clipId: string, effect: {
     value?: string;
     effectParams?: any;
 }): void;
+
+// Transition Operations
+declare function addTransition(
+    clipId: string, 
+    type: 'in' | 'out', 
+    transition: 'fade' | 'wipe' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down' | 'zoom-in' | 'zoom-out', 
+    duration?: number
+): void;
 
 // External Resources
 declare function addAssetFromUrl(url: string, name?: string): Promise<any>;
@@ -196,16 +225,26 @@ declare const clips: any[];
     // Handle divider drag
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
-            if (!isDragging || !containerRef.current) return;
-
+            if (!containerRef.current) return;
             const rect = containerRef.current.getBoundingClientRect();
-            const newPos = ((e.clientY - rect.top) / rect.height) * 100;
-            setDividerPos(Math.max(20, Math.min(80, newPos)));
+
+            if (isDragging) {
+                const newPos = ((e.clientY - rect.top) / rect.height) * 100;
+                setDividerPos(Math.max(15, Math.min(40, newPos)));
+            }
+
+            if (isDragging2) {
+                const newPos = ((e.clientY - rect.top) / rect.height) * 100;
+                setDivider2Pos(Math.max(dividerPos + 15, Math.min(70, newPos)));
+            }
         };
 
-        const handleMouseUp = () => setIsDragging(false);
+        const handleMouseUp = () => {
+            setIsDragging(false);
+            setIsDragging2(false);
+        };
 
-        if (isDragging) {
+        if (isDragging || isDragging2) {
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
         }
@@ -214,7 +253,36 @@ declare const clips: any[];
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDragging]);
+    }, [isDragging, isDragging2, dividerPos]);
+
+    // Handle AI script generation
+    const handleGenerateAIScript = async () => {
+        if (!aiPrompt.trim()) {
+            addOutput('error', 'Please enter a prompt');
+            return;
+        }
+
+        setIsGenerating(true);
+
+        try {
+            const code = await generateTimelineScript(aiPrompt, assets, clips, tracks);
+            setConsoleCode(code);
+            addOutput('info', '✨ AI script generated! Click "Run" to execute it.');
+        } catch (e: any) {
+            addOutput('error', `AI Generation failed: ${e.message}`);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // Save API key
+    const handleSaveApiKey = () => {
+        if (aiApiKey.trim()) {
+            setApiKey(aiApiKey.trim());
+            setShowApiKeyInput(false);
+            addOutput('info', '✓ API Key saved');
+        }
+    };
 
     // Execute console command
     const handleExecuteConsole = async () => {
@@ -288,8 +356,88 @@ declare const clips: any[];
 
     return (
         <div ref={containerRef} className="flex flex-col h-full bg-[#1e1e1e] text-gray-300">
-            {/* Panel 1: Command Console */}
+            {/* Panel 0: AI Assistant (NEW) */}
             <div style={{ height: `${dividerPos}%` }} className="flex flex-col border-b border-[#444]">
+                {/* Header */}
+                <div className="flex items-center justify-between p-2 border-b border-[#333] bg-gradient-to-r from-[#2a2d3a] to-[#252526]">
+                    <div className="flex items-center gap-2">
+                        <Sparkles size={14} className="text-purple-400" />
+                        <span className="text-xs font-semibold">AI Script Assistant</span>
+                        {hasApiKey() && <span className="text-[9px] text-green-400">● Connected</span>}
+                    </div>
+                    <button
+                        onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+                        className="flex items-center gap-1 px-2 py-1 bg-[#333] hover:bg-[#444] text-white rounded text-xs transition"
+                        title="Manage API Key"
+                    >
+                        <Key size={12} />
+                    </button>
+                </div>
+
+                {/* API Key Input (Collapsible) */}
+                {showApiKeyInput && (
+                    <div className="p-3 bg-[#1a1a1a] border-b border-[#333]">
+                        <label className="text-[10px] text-gray-400 mb-1 block">Gemini API Key</label>
+                        <div className="flex gap-2">
+                            <input
+                                type="password"
+                                value={aiApiKey}
+                                onChange={(e) => setAiApiKey(e.target.value)}
+                                className="flex-1 px-2 py-1 bg-[#2d2d2d] border border-[#444] rounded text-xs text-white outline-none focus:border-blue-500"
+                                placeholder="AIzaSy..."
+                            />
+                            <button
+                                onClick={handleSaveApiKey}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold transition"
+                            >
+                                Save
+                            </button>
+                        </div>
+                        <p className="text-[9px] text-gray-500 mt-1">Get your API key from Google AI Studio</p>
+                    </div>
+                )}
+
+                {/* Prompt Input */}
+                <div className="flex-1 flex flex-col p-3 overflow-hidden">
+                    <label className="text-[10px] text-gray-400 mb-1">Natural Language Prompt</label>
+                    <textarea
+                        value={aiPrompt}
+                        onChange={(e) => setAiPrompt(e.target.value)}
+                        className="flex-1 p-2 bg-[#2d2d2d] border border-[#444] rounded text-xs text-white resize-none outline-none focus:border-purple-500 font-mono"
+                        placeholder="Example: Add all images from my media library with fade transitions, each lasting 3 seconds..."
+                        onKeyDown={(e) => e.stopPropagation()}
+                        onKeyUp={(e) => e.stopPropagation()}
+                    />
+                    <button
+                        onClick={handleGenerateAIScript}
+                        disabled={isGenerating || !hasApiKey()}
+                        className="mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded text-xs font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isGenerating ? (
+                            <>
+                                <Loader size={12} className="animate-spin" />
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles size={12} />
+                                Generate Script
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+
+            {/* Draggable Divider 1 */}
+            <div
+                className="h-2 bg-[#2d2d2d] hover:bg-purple-900/30 cursor-ns-resize flex items-center justify-center group transition-colors"
+                onMouseDown={() => setIsDragging(true)}
+            >
+                <GripVertical size={14} className="text-gray-600 group-hover:text-purple-400" />
+            </div>
+
+            {/* Panel 1: Command Console */}
+            <div style={{ height: `${divider2Pos - dividerPos - 0.5}%` }} className="flex flex-col border-b border-[#444]">
                 {/* Header */}
                 <div className="flex items-center justify-between p-2 border-b border-[#333] bg-[#252526]">
                     <div className="flex items-center gap-2">
@@ -336,16 +484,16 @@ declare const clips: any[];
                 )}
             </div>
 
-            {/* Draggable Divider */}
+            {/* Draggable Divider 2 */}
             <div
                 className="h-2 bg-[#2d2d2d] hover:bg-[#3d3d3d] cursor-ns-resize flex items-center justify-center group transition-colors"
-                onMouseDown={() => setIsDragging(true)}
+                onMouseDown={() => setIsDragging2(true)}
             >
                 <GripVertical size={14} className="text-gray-600 group-hover:text-gray-400" />
             </div>
 
             {/* Panel 2: Timeline State */}
-            <div style={{ height: `${100 - dividerPos - 0.5}%` }} className="flex flex-col">
+            <div style={{ height: `${100 - divider2Pos - 0.5}%` }} className="flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between p-2 border-b border-[#333] bg-[#252526]">
                     <div className="flex items-center gap-2">

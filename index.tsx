@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './tailwind.css';
 import App from './App';
+import './initApi'; // Initialize Gemini API key
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

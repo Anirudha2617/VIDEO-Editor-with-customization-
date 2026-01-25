@@ -1,4 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
+import { getApiKey } from './apiKeyService';
+import { Asset, Clip, Track } from '../types';
 
 // Extend Window interface for AI Studio API
 declare global {
@@ -12,10 +14,11 @@ declare global {
 
 // Ensure we have a client factory to handle dynamic API key selection for Veo
 const createClient = () => {
-  const apiKey = process.env.API_KEY;
+  // Check localStorage first, then environment variable
+  const apiKey = getApiKey();
   if (!apiKey) {
-    console.error("API Key is missing! Check your .env file and ensure GEMINI_API_KEY is set.");
-    throw new Error("API Key is missing. Please check your .env file.");
+    console.error("API Key is missing! Please set it in the Script Editor or check your .env file.");
+    throw new Error("API Key is missing. Please set it in the Script Editor.");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -280,5 +283,133 @@ export const generateCodeSnippet = async (prompt: string, language: string): Pro
     console.error("Code generation failed:", error);
     // Fallback
     return `/* AI Generation Failed */\n/* Request: ${prompt} */\n/* Please check your API key and connection. */`;
+  }
+}
+
+/**
+ * Generates executable timeline script code from natural language prompt.
+ */
+export const generateTimelineScript = async (
+  prompt: string,
+  assets: Asset[],
+  clips: Clip[],
+  tracks: Track[]
+): Promise<string> => {
+  try {
+    const ai = createClient();
+
+    // Build context for the AI
+    const assetContext = assets.map(a =>
+      `- ${a.name} (id: "${a.id}", type: ${a.type})`
+    ).join('\n');
+
+    const trackContext = tracks.map((t, idx) =>
+      `- Track ${idx + 1}: ${t.name} (id: "${t.id}")`
+    ).join('\n');
+
+    const systemPrompt = `You are a timeline scripting assistant for Lumina Video Editor.
+Generate EXECUTABLE JavaScript code using the provided API to manipulate the timeline.
+
+AVAILABLE ASSETS:
+${assetContext}
+
+AVAILABLE TRACKS:
+${trackContext}
+
+API DOCUMENTATION:
+
+📌 CLIP OPERATIONS:
+- addClip(assetNameOrId, {track, start, duration?, scale?, opacity?, x?, y?}) - Add a clip to the timeline
+  Example: addClip("Sample_Landscape", {track: 1, start: 0, duration: 5})
+  Example: addClip(asset.id, {track: 2, start: 5, duration: 3, opacity: 0.8})
+
+- updateClip(clipId, updates) - Update an existing clip's properties
+  Example: updateClip("clip-123", {opacity: 0.5, scale: 1.2, rotation: 45})
+
+- removeClip(clipId) - Remove a clip from the timeline
+  Example: removeClip("clip-123")
+
+- getClip(clipId) - Get clip details
+  Example: const clip = getClip("clip-123")
+
+📝 TEXT ASSET CREATION:
+- addTextAsset(text, options?) - Create a text overlay asset
+  Options: {fontSize, fontColor, fontFamily, isBold, backgroundColor, borderRadius, padding}
+  Example: const txt = addTextAsset("Hello World", {fontSize: 64, fontColor: "#ffff00", isBold: true})
+  Example: const caption = addTextAsset("Subscribe!", {fontSize: 48, fontColor: "#ffffff", backgroundColor: "#ff0000", borderRadius: 10, padding: 20})
+  Then use: addClip(txt.id, {track: 2, start: 0, duration: 3})
+
+🎨 EFFECT OPERATIONS:
+- addEffect(clipId, {name, value}) - Add a CSS filter effect to a clip
+  Example: addEffect(clipId, {name: "Blur", value: "blur(5px)"})
+  Example: addEffect(clipId, {name: "Vintage", value: "sepia(50%) contrast(120%)"})
+  Example: addEffect(clipId, {name: "B&W", value: "grayscale(100%)"})
+  Common effects: blur, brightness, contrast, grayscale, sepia, hue-rotate, saturate
+
+✨ TRANSITION OPERATIONS:
+- addTransition(clipId, type, animationType, duration?) - Add enter/exit transition
+  type: 'in' (entrance) or 'out' (exit)
+  animationType: 'fade' | 'wipe' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down' | 'zoom-in' | 'zoom-out'
+  duration: number in seconds (default: 1)
+  Example: addTransition(clipId, 'in', 'fade', 1.5)
+  Example: addTransition(clipId, 'out', 'zoom-out', 0.8)
+
+🤖 AI GENERATION:
+- ai.generateImage(prompt) - Generate an AI image and add it as an asset
+  Example: const img = await ai.generateImage("sunset over mountains");
+          addClip(img.id, {track: 1, start: 0, duration: 5});
+
+🌐 EXTERNAL ASSETS:
+- addAssetFromUrl(url, name?) - Download and add an asset from URL
+  Example: const asset = await addAssetFromUrl("https://example.com/image.jpg", "My Image");
+          addClip(asset.id, {track: 1, start: 0, duration: 5});
+
+📊 UTILITY:
+- display(content) - Show output in the console
+  Example: display("✓ Added 5 clips successfully!");
+  Example: display(\`Current clip count: \${clipCount}\`)
+
+CURRENT CLIPS: ${clips.length} clips on timeline
+
+RULES:
+1. Generate ONLY executable JavaScript code
+2. NO markdown code blocks, NO explanations, NO comments except inline
+3. Use asset names or IDs directly
+4. Track numbers are 1-indexed (track: 1, track: 2, etc.)
+5. Use async/await for AI operations and addAssetFromUrl
+6. Always call display() at the end to confirm success
+7. For text overlays, create text asset THEN add to timeline
+8. Transitions are applied to clips AFTER they're created
+9. Effects are added to clips AFTER they're created
+
+USER REQUEST:
+${prompt}
+
+Generate the code now:`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: {
+        parts: [{ text: systemPrompt }]
+      }
+    });
+
+    let code = response.text || "";
+
+    // Clean up any markdown formatting
+    code = code.replace(/```javascript\n?/g, '').replace(/```js\n?/g, '').replace(/```\n?/g, '').trim();
+
+    // Remove any leading/trailing explanatory text
+    const lines = code.split('\n');
+    const codeLines = lines.filter(line => {
+      const trimmed = line.trim();
+      return trimmed.length > 0 &&
+        !trimmed.match(/^(Here|This|The code|I've|Let me|Note:|Output:)/i);
+    });
+
+    return codeLines.join('\n');
+  } catch (error) {
+    console.error("Timeline script generation failed:", error);
+    throw new Error(`Failed to generate script: ${(error as Error).message}`);
   }
 }

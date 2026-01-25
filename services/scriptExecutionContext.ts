@@ -31,8 +31,22 @@ export interface ScriptExecutionContext {
     updateClip: (id: string, updates: Partial<Clip>) => void;
     getClip: (id: string) => Clip | undefined;
 
+    // Asset creation
+    addTextAsset: (text: string, options?: {
+        fontSize?: number;
+        fontColor?: string;
+        fontFamily?: string;
+        isBold?: boolean;
+        backgroundColor?: string;
+        borderRadius?: number;
+        padding?: number;
+    }) => Asset;
+
     // Effect operations
     addEffect: (clipId: string, effect: Partial<Effect>) => void;
+
+    // Transition operations
+    addTransition: (clipId: string, type: 'in' | 'out', transition: AnimationType, duration?: number) => void;
 
     // External resources
     addAssetFromUrl: (url: string, name?: string) => Promise<Asset>;
@@ -67,24 +81,42 @@ export const createExecutionContext = (
         assetMap[safeName] = asset.id;
     });
 
+    // Runtime cache for newly created assets (fixes race condition)
+    const runtimeAssets: Asset[] = [];
+
     // Helper to resolve asset ID from name or ID
     const resolveAssetId = (nameOrId: string): string => {
         return assetMap[nameOrId] || nameOrId;
+    };
+
+    // Helper to find asset (checks runtime cache first)
+    const findAsset = (assetIdOrName: string): Asset | undefined => {
+        let assetId = resolveAssetId(assetIdOrName);
+
+        // Check runtime cache first (newly created assets)
+        let asset = runtimeAssets.find(a => a.id === assetId || a.name === assetIdOrName);
+
+        // Then check original assets array
+        if (!asset) {
+            asset = assets.find(a => a.id === assetId);
+        }
+
+        // Try finding by name directly
+        if (!asset) {
+            asset = assets.find(a => a.name === assetIdOrName) ||
+                runtimeAssets.find(a => a.name === assetIdOrName);
+        }
+
+        return asset;
     };
 
     const context: ScriptExecutionContext = {
         assets: assetMap,
 
         addClip: (assetIdOrName: string, config: ClipConfig) => {
-            let assetId = resolveAssetId(assetIdOrName);
-            let asset = assets.find(a => a.id === assetId);
+            let asset = findAsset(assetIdOrName);
 
-            // If not found by ID/Map, try finding by Name directly
-            if (!asset) {
-                asset = assets.find(a => a.name === assetIdOrName);
-            }
-
-            // Handle Virtual Assets (Animation/Shape) if still not found
+            // Handle Virtual Assets (Animation/Shape/Effect) if still not found
             if (!asset) {
                 if (assetIdOrName.startsWith('anim_')) {
                     const animType = assetIdOrName.replace('anim_', '');
@@ -155,6 +187,18 @@ export const createExecutionContext = (
                 newClip.strokeColor = '#ffffff';
                 newClip.strokeWidth = 2;
             }
+            // Apply text properties for text clips
+            if (asset.type === MediaType.TEXT && (asset as any).textProps) {
+                const textProps = (asset as any).textProps;
+                newClip.text = textProps.text;
+                newClip.fontSize = textProps.fontSize;
+                newClip.fontColor = textProps.fontColor;
+                newClip.fontFamily = textProps.fontFamily;
+                newClip.isBold = textProps.isBold;
+                newClip.backgroundColor = textProps.backgroundColor;
+                newClip.borderRadius = textProps.borderRadius;
+                newClip.padding = textProps.padding;
+            }
 
             onAddClip(newClip);
             return { id: newClip.id };
@@ -191,6 +235,54 @@ export const createExecutionContext = (
             });
         },
 
+        addTextAsset: (text: string, options = {}) => {
+            const asset: Asset = {
+                id: crypto.randomUUID(),
+                type: MediaType.TEXT,
+                src: '', // Text assets don't need a source file
+                name: text.substring(0, 30) || 'Text'
+            };
+
+            // Store text properties that will be used when creating clips
+            (asset as any).textProps = {
+                text,
+                fontSize: options.fontSize || 48,
+                fontColor: options.fontColor || '#ffffff',
+                fontFamily: options.fontFamily || 'Arial',
+                isBold: options.isBold || false,
+                backgroundColor: options.backgroundColor,
+                borderRadius: options.borderRadius || 0,
+                padding: options.padding || 10
+            };
+
+            // Add to runtime cache FIRST (fixes race condition)
+            runtimeAssets.push(asset);
+
+            // Then notify React state
+            onAddAsset(asset);
+            return asset;
+        },
+
+        addTransition: (clipId: string, type: 'in' | 'out', transition: AnimationType, duration = 1) => {
+            const clip = clips.find(c => c.id === clipId);
+            if (!clip) {
+                throw new Error(`Clip not found: ${clipId}`);
+            }
+
+            const updates: Partial<Clip> = {};
+            if (type === 'in') {
+                updates.animationIn = transition;
+                updates.animationInDuration = duration;
+                updates.animationInEasing = 'ease-in-out';
+            } else {
+                updates.animationOut = transition;
+                updates.animationOutDuration = duration;
+                updates.animationOutEasing = 'ease-in-out';
+            }
+
+            onUpdateClip(clipId, updates);
+        },
+
         addAssetFromUrl: async (url: string, name?: string) => {
             const response = await fetch(url);
             const blob = await response.blob();
@@ -207,6 +299,10 @@ export const createExecutionContext = (
                 name: name || url.split('/').pop() || 'Downloaded Asset'
             };
 
+            // Add to runtime cache FIRST (fixes race condition)
+            runtimeAssets.push(asset);
+
+            // Then notify React state
             onAddAsset(asset);
             return asset;
         },
