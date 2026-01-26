@@ -284,28 +284,48 @@ export const createExecutionContext = (
         },
 
         addAssetFromUrl: async (url: string, name?: string) => {
-            const response = await fetch(url);
+            let response: Response;
+
+            try {
+                response = await fetch(url, { mode: "cors" });
+            } catch {
+                throw new Error("Download failed: Network or CORS error");
+            }
+
+            if (!response.ok) {
+                throw new Error(`Download failed: HTTP ${response.status}`);
+            }
+
             const blob = await response.blob();
+
+            // 🚨 CRITICAL: CORS-blocked responses often return 0-byte blobs
+            if (!blob || blob.size === 0) {
+                throw new Error("Download failed: Empty response (likely CORS blocked)");
+            }
+
+            // Extra safety: verify it's actually an image/video
+            if (!blob.type.startsWith("image/") && !blob.type.startsWith("video/")) {
+                throw new Error(`Download failed: Unsupported MIME type ${blob.type}`);
+            }
+
             const objectUrl = URL.createObjectURL(blob);
 
-            const type = blob.type.startsWith('image/') ? MediaType.IMAGE :
-                blob.type.startsWith('video/') ? MediaType.VIDEO :
-                    MediaType.IMAGE;
+            const type = blob.type.startsWith("video/")
+                ? MediaType.VIDEO
+                : MediaType.IMAGE;
 
             const asset: Asset = {
                 id: crypto.randomUUID(),
                 type,
                 src: objectUrl,
-                name: name || url.split('/').pop() || 'Downloaded Asset'
+                name: name || url.split("/").pop() || "Downloaded Asset",
             };
 
-            // Add to runtime cache FIRST (fixes race condition)
             runtimeAssets.push(asset);
-
-            // Then notify React state
             onAddAsset(asset);
             return asset;
         },
+
 
         ai: {
             generateImage: async (prompt: string) => {

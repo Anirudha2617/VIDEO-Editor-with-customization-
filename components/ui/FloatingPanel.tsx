@@ -42,7 +42,6 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         return (
             <div
                 className="flex flex-col h-full w-full bg-[#18181b] overflow-hidden border-b border-[#27272a] last:border-b-0"
-                onMouseDown={onFocus}
             >
                 {/* Simple Header for Docked State */}
                 <div className="h-9 flex items-center justify-between px-3 bg-[#27272a] border-b border-[#3f3f46] shrink-0">
@@ -87,14 +86,15 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
             onMouseDown={onFocus}
             className={`flex flex-col bg-[#18181b]/95 backdrop-blur-md border border-[#27272a] rounded-lg shadow-2xl overflow-hidden`}
             style={{ zIndex, display: 'flex' }}
-            dragHandleClassName="panel-header"
+            dragHandleClassName="panel-drag-handle"
+            enableUserSelectHack={false}
             bounds="window"
             minWidth={200}
             minHeight={150}
             enableResizing={true}
         >
             {/* Header */}
-            <div className="panel-header h-9 flex items-center justify-between px-3 bg-[#27272a] border-b border-[#3f3f46] cursor-grab active:cursor-grabbing select-none shrink-0 group">
+            <div className="panel-drag-handle h-9 flex items-center justify-between px-3 bg-[#27272a] border-b border-[#3f3f46] cursor-grab active:cursor-grabbing select-none shrink-0 group">
                 <div className="flex items-center gap-2">
                     <GripHorizontal size={14} className="text-gray-500 group-hover:text-gray-300" />
                     <span className="text-xs font-semibold text-gray-200">{title}</span>
@@ -105,6 +105,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                         onClick={() => onDock(id, 'left')}
                         className="text-gray-500 hover:text-white hover:bg-[#3f3f46] p-1 rounded transition-colors"
                         title="Dock Left"
+                        onMouseDown={(e) => e.stopPropagation()}
                     >
                         <PanelLeft size={12} />
                     </button>
@@ -112,6 +113,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                         onClick={() => onDock(id, 'right')}
                         className="text-gray-500 hover:text-white hover:bg-[#3f3f46] p-1 rounded transition-colors"
                         title="Dock Right"
+                        onMouseDown={(e) => e.stopPropagation()}
                     >
                         <PanelRight size={12} />
                     </button>
@@ -119,6 +121,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                         onClick={() => onDock(id, 'top')}
                         className="text-gray-500 hover:text-white hover:bg-[#3f3f46] p-1 rounded transition-colors"
                         title="Dock Top"
+                        onMouseDown={(e) => e.stopPropagation()}
                     >
                         <ArrowUp size={12} />
                     </button>
@@ -126,6 +129,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                         onClick={() => onDock(id, 'bottom')}
                         className="text-gray-500 hover:text-white hover:bg-[#3f3f46] p-1 rounded transition-colors"
                         title="Dock Bottom"
+                        onMouseDown={(e) => e.stopPropagation()}
                     >
                         <ArrowDown size={12} />
                     </button>
@@ -133,6 +137,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                         onClick={() => onDock(id, 'center')}
                         className="text-gray-500 hover:text-white hover:bg-[#3f3f46] p-1 rounded transition-colors"
                         title="Dock Center"
+                        onMouseDown={(e) => e.stopPropagation()}
                     >
                         <LayoutTemplate size={12} />
                     </button>
@@ -140,14 +145,18 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                     <button
                         onClick={(e) => { e.stopPropagation(); onClose(); }}
                         className="text-gray-500 hover:text-white hover:bg-red-500/20 p-1 rounded transition-colors"
+                        onMouseDown={(e) => e.stopPropagation()}
                     >
                         <X size={14} />
                     </button>
                 </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-hidden relative min-h-0">
+            {/* Content */}            {/* Let the childrens have their own properties */}
+            <div
+                className="flex-1 overflow-hidden relative min-h-0"
+                onMouseDown={(e) => e.stopPropagation()}
+            >
                 {children}
             </div>
         </Rnd>
