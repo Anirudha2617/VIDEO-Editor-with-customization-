@@ -1,39 +1,53 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Asset, MediaType } from '../../types';
-import { Upload, Music, Image as ImageIcon, Video, Edit2, FileEdit } from 'lucide-react';
+import { Upload, Music, Image as ImageIcon, Video, Edit2, FileEdit, Trash2 } from 'lucide-react';
 import StockMediaBrowser from '../StockMediaBrowser';
 import ImageEditor from '../ImageEditor';
+
+// NOTE: We now rely on the parent (App -> useMediaLibrary) for the heavy lifting.
+// MediaUtils import is removed.
 
 interface MediaPanelProps {
     assets: Asset[];
     onAddAsset: (asset: Asset) => void;
+    onImportFiles?: (files: File[]) => Promise<void>; // New Prop for bulk import
     onUpdateAsset?: (assetId: string, updates: Partial<Asset>) => void;
+    onRemoveAsset?: (assetId: string) => void;
     onDragStart: (e: React.DragEvent, item: any, type: string) => void;
 }
 
-const MediaPanel: React.FC<MediaPanelProps> = ({ assets, onAddAsset, onUpdateAsset, onDragStart }) => {
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+const MediaPanel: React.FC<MediaPanelProps> = ({
+    assets,
+    onAddAsset,
+    onImportFiles,
+    onUpdateAsset,
+    onRemoveAsset,
+    onDragStart
+}) => {
+    const [isProcessing, setIsProcessing] = useState(false);
 
-        const url = URL.createObjectURL(file);
-        let type = MediaType.IMAGE;
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
 
-        if (file.type.startsWith('video')) {
-            type = MediaType.VIDEO;
-        } else if (file.type.startsWith('audio')) {
-            type = MediaType.AUDIO;
-        } else if (file.type.startsWith('image')) {
-            type = MediaType.IMAGE;
+        // If onImportFiles is provided (New Architecture), use it.
+        if (onImportFiles) {
+            setIsProcessing(true);
+            try {
+                // Convert FileList to Array
+                await onImportFiles(Array.from(files));
+            } catch (error) {
+                console.error("Import failed:", error);
+            } finally {
+                setIsProcessing(false);
+                e.target.value = '';
+            }
+            return;
         }
 
-        const newAsset: Asset = {
-            id: crypto.randomUUID(),
-            type,
-            src: url,
-            name: file.name,
-        };
-        onAddAsset(newAsset);
+        // Fallback for Legacy (Should not be hit if App.tsx is updated)
+        console.warn("MediaPanel: onImportFiles prop missing, upload disabled.");
+        setIsProcessing(false);
     };
 
     const [editingAsset, setEditingAsset] = React.useState<Asset | null>(null);
@@ -51,6 +65,13 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ assets, onAddAsset, onUpdateAss
             setEditingAsset(contextMenu.asset);
             setContextMenu(null);
         }
+    };
+
+    const handleDeleteAsset = (assetId: string) => {
+        if (onRemoveAsset) {
+            onRemoveAsset(assetId);
+        }
+        setContextMenu(null);
     };
 
     const handleSaveEditedImage = (newSrc: string) => {
@@ -119,16 +140,35 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ assets, onAddAsset, onUpdateAss
                     >
                         <Edit2 size={12} /> Edit Image
                     </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleRenameStart(); }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-gray-200 hover:bg-[#3f3f46] flex items-center gap-2"
+                    >
+                        <FileEdit size={12} /> Rename
+                    </button>
+                    {onRemoveAsset && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteAsset(contextMenu.asset.id); }}
+                            className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-[#3f3f46] flex items-center gap-2"
+                        >
+                            <Trash2 size={12} /> Delete
+                        </button>
+                    )}
                 </div>
             )}
 
             <div className="space-y-4">
-                <label className="flex flex-col items-center justify-center w-full h-24 border border-dashed border-[#3f3f46] rounded-lg cursor-pointer hover:border-[#52525b] hover:bg-[#27272a] transition-colors">
+                {/* Handle File Upload  */}
+                <label className={`flex flex-col items-center justify-center w-full h-24 border border-dashed border-[#3f3f46] rounded-lg cursor-pointer hover:border-[#52525b] hover:bg-[#27272a] transition-colors ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <Upload className="w-5 h-5 text-gray-400 mb-1" />
-                        <p className="text-[10px] text-gray-500">Upload Media</p>
+                        {isProcessing ? (
+                            <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mb-1"></div>
+                        ) : (
+                            <Upload className="w-5 h-5 text-gray-400 mb-1" />
+                        )}
+                        <p className="text-[10px] text-gray-500">{isProcessing ? 'Processing...' : 'Upload Media'}</p>
                     </div>
-                    <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,video/*,audio/*" />
+                    <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,video/*,audio/*" multiple />
                 </label>
 
                 {/* Stock Media Browser */}
@@ -150,15 +190,24 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ assets, onAddAsset, onUpdateAss
                                 className="bg-[#27272a] hover:bg-[#3f3f46] p-2 rounded cursor-grab active:cursor-grabbing border border-[#3f3f46] transition relative group"
                             >
                                 {asset.type === MediaType.VIDEO && (
-                                    <video src={asset.src} className="w-full h-20 object-cover rounded mb-1 bg-black" />
+                                    <div className="relative w-full h-20 mb-1 bg-black rounded overflow-hidden">
+                                        <video src={asset.src} className="w-full h-full object-cover" />
+                                        <div className="absolute bottom-1 right-1 bg-black/70 px-1 rounded text-[8px] text-white">
+                                            {/* We could display duration here if we stored it */}
+                                            Video
+                                        </div>
+                                    </div>
                                 )}
                                 {asset.type === MediaType.AUDIO && (
-                                    <div className="w-full h-20 flex items-center justify-center bg-[#111] rounded mb-1">
+                                    <div className="w-full h-20 flex items-center justify-center bg-[#111] rounded mb-1 relative">
                                         <Music className="w-6 h-6 text-pink-400" />
+                                        <div className="absolute bottom-1 right-1 bg-black/70 px-1 rounded text-[8px] text-white">Audio</div>
                                     </div>
                                 )}
                                 {asset.type === MediaType.IMAGE && (
-                                    <img src={asset.src} alt={asset.name} className="w-full h-20 object-cover rounded mb-1 bg-black" />
+                                    <div className="relative w-full h-20 mb-1 bg-black rounded overflow-hidden">
+                                        <img src={asset.src} alt={asset.name} className="w-full h-full object-cover" />
+                                    </div>
                                 )}
                                 {renamingAssetId === asset.id ? (
                                     <input
@@ -172,7 +221,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({ assets, onAddAsset, onUpdateAss
                                         onClick={(e) => e.stopPropagation()}
                                     />
                                 ) : (
-                                    <span className="text-[10px] text-gray-400 truncate block px-1">{asset.name}</span>
+                                    <span className="text-[10px] text-gray-400 truncate block px-1" title={asset.name}>{asset.name}</span>
                                 )}
                             </div>
                         ))}

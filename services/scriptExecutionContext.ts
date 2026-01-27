@@ -1,4 +1,4 @@
-import { Asset, Clip, Track, MediaType, Effect } from '../types';
+import { Asset, Clip, Track, MediaType, Effect, AnimationType } from '../types';
 import { generateImageAsset } from './geminiService';
 import { registerTransition as registerTransitionInRegistry } from '../transitions/registry';
 import { Transition, TransitionContext, TransitionResult } from '../transitions/types';

@@ -1,5 +1,5 @@
 /**
- * Audio Mixer Service
+ * Audio Mixer Engine
  * Handles multi-track audio mixing with Web Audio API
  */
 

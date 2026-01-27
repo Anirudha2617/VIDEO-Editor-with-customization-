@@ -26,6 +26,7 @@ import { registerEffect } from './effects/registry';
 import { getDemoContent } from './utils/demoContent';
 import { saveProjectToFile, loadProjectFromFile } from './services/persistenceService';
 import { FolderOpen } from 'lucide-react';
+import { useMediaLibrary } from './hooks/useMediaLibrary';
 
 const INITIAL_TRACKS: Track[] = [
   { id: 't1', type: MediaType.VIDEO, name: 'Video Track 1' },
@@ -41,7 +42,7 @@ const INITIAL_ASSETS: Asset[] = [
 
 function App() {
   const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS);
-  const [assets, setAssets] = useState<Asset[]>(INITIAL_ASSETS);
+  const { assets, setAssets, importFiles, removeAsset, updateAsset } = useMediaLibrary(INITIAL_ASSETS);
   const [clips, setClips] = useState<Clip[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(300);
@@ -321,9 +322,8 @@ function App() {
 
   // Asset Handlers
   const handleAddAsset = (asset: Asset) => setAssets(prev => [...prev, asset]);
-  const handleUpdateAsset = (assetId: string, updates: Partial<Asset>) => {
-    setAssets(prev => prev.map(a => a.id === assetId ? { ...a, ...updates } : a));
-  };
+  const handleUpdateAsset = (assetId: string, updates: Partial<Asset>) => updateAsset(assetId, updates);
+  const handleRemoveAsset = (assetId: string) => removeAsset(assetId);
   const handleUploadFont = (font: CustomFont) => setCustomFonts(prev => [...prev, font]);
   const handleDragStart = (e: React.DragEvent, item: any, type?: string) => {
     if (type === 'effect') {
@@ -673,7 +673,7 @@ function App() {
 
   const renderPanelContent = (panel: PanelState) => {
     switch (panel.type) {
-      case 'media': return <MediaPanel assets={assets} onAddAsset={handleAddAsset} onUpdateAsset={handleUpdateAsset} onDragStart={handleDragStart} />;
+      case 'media': return <MediaPanel assets={assets} onAddAsset={handleAddAsset} onImportFiles={importFiles} onUpdateAsset={handleUpdateAsset} onRemoveAsset={handleRemoveAsset} onDragStart={handleDragStart} />;
       case 'audio': return <AudioPanel onAddAsset={handleAddAsset} />;
       case 'text': return <TextPanel assets={assets} onDragStart={handleDragStart} />;
       case 'shapes': return <ShapesPanel onDragStart={handleDragStart} />;
