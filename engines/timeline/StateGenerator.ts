@@ -1,4 +1,4 @@
-import { Clip, Track, Asset } from '../types';
+import { Clip, Track, Asset } from '../../types';
 
 export interface TimelineState {
     clips: Array<{

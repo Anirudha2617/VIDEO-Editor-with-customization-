@@ -3,9 +3,9 @@ import Editor from '@monaco-editor/react';
 import { Play, RefreshCw, Terminal, FileJson, Sparkles, Key, Loader, Copy, Check } from 'lucide-react';
 import { Clip, Track, Asset } from '../../types';
 import { createExecutionContext } from '../../services/scriptExecutionContext';
-import { generateTimelineState, parseTimelineState } from '../../services/timelineStateGenerator';
+import { generateTimelineState, parseTimelineState } from '../../engines/timeline/StateGenerator';
 import { getApiKey, setApiKey, hasApiKey } from '../../services/apiKeyService';
-import { generateTimelineScript } from '../../services/geminiService';
+import { generateTimelineScript } from '../../services/ai/GeminiProvider';
 
 interface ScriptPanelProps {
     tracks: Track[];

@@ -1,7 +1,9 @@
 import { Asset, Clip, Track, MediaType, Effect, AnimationType } from '../types';
-import { generateImageAsset } from './geminiService';
+import { generateImageAsset } from './ai/GeminiProvider';
 import { registerTransition as registerTransitionInRegistry } from '../transitions/registry';
 import { Transition, TransitionContext, TransitionResult } from '../transitions/types';
+import { MediaPipeline, createMediaPipeline } from '../pipelines/media';
+
 
 export interface ClipConfig {
     track: number;
@@ -22,6 +24,9 @@ export interface TransitionConfig {
 }
 
 export interface ScriptExecutionContext {
+    // Pipeline Endpoints
+    media: MediaPipeline;
+
     // Asset references (auto-injected)
     assets: Record<string, string>;
 
@@ -71,10 +76,16 @@ export const createExecutionContext = (
     onUpdateClip: (id: string, updates: Partial<Clip>) => void,
     onRemoveClip: (id: string) => void,
     onAddAsset: (asset: Asset) => void,
+    onRemoveAsset: (id: string) => void,
+    onUpdateAsset: (id: string, updates: Partial<Asset>) => void,
     onDisplay: (content: any) => void
 ): ScriptExecutionContext => {
 
-    // Create asset name map
+    // Runtime cache for newly created assets (fixes race condition)
+    const runtimeAssets: Asset[] = [];
+
+    // Initialize Pipelines
+    const mediaPipeline = createMediaPipeline(assets, onAddAsset, onUpdateAsset, onRemoveAsset, runtimeAssets);
     const assetMap: Record<string, string> = {};
     assets.forEach(asset => {
         const safeName = asset.name.replace(/[^a-zA-Z0-9]/g, '_');
@@ -82,7 +93,7 @@ export const createExecutionContext = (
     });
 
     // Runtime cache for newly created assets (fixes race condition)
-    const runtimeAssets: Asset[] = [];
+
 
     // Helper to resolve asset ID from name or ID
     const resolveAssetId = (nameOrId: string): string => {
@@ -111,6 +122,7 @@ export const createExecutionContext = (
     };
 
     const context: ScriptExecutionContext = {
+        media: mediaPipeline,
         assets: assetMap,
 
         addClip: (assetIdOrName: string, config: ClipConfig) => {
@@ -283,50 +295,7 @@ export const createExecutionContext = (
             onUpdateClip(clipId, updates);
         },
 
-        addAssetFromUrl: async (url: string, name?: string) => {
-            let response: Response;
-
-            try {
-                response = await fetch(url, { mode: "cors" });
-            } catch {
-                throw new Error("Download failed: Network or CORS error");
-            }
-
-            if (!response.ok) {
-                throw new Error(`Download failed: HTTP ${response.status}`);
-            }
-
-            const blob = await response.blob();
-
-            // 🚨 CRITICAL: CORS-blocked responses often return 0-byte blobs
-            if (!blob || blob.size === 0) {
-                throw new Error("Download failed: Empty response (likely CORS blocked)");
-            }
-
-            // Extra safety: verify it's actually an image/video
-            if (!blob.type.startsWith("image/") && !blob.type.startsWith("video/")) {
-                throw new Error(`Download failed: Unsupported MIME type ${blob.type}`);
-            }
-
-            const objectUrl = URL.createObjectURL(blob);
-
-            const type = blob.type.startsWith("video/")
-                ? MediaType.VIDEO
-                : MediaType.IMAGE;
-
-            const asset: Asset = {
-                id: crypto.randomUUID(),
-                type,
-                src: objectUrl,
-                name: name || url.split("/").pop() || "Downloaded Asset",
-            };
-
-            runtimeAssets.push(asset);
-            onAddAsset(asset);
-            return asset;
-        },
-
-
+        addAssetFromUrl: mediaPipeline.addFromUrl,
         ai: {
             generateImage: async (prompt: string) => {
                 const imageUrl = await generateImageAsset(prompt);

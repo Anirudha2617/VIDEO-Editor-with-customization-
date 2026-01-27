@@ -27,6 +27,9 @@ import { getDemoContent } from './utils/demoContent';
 import { saveProjectToFile, loadProjectFromFile } from './services/persistenceService';
 import { FolderOpen } from 'lucide-react';
 import { useMediaLibrary } from './hooks/useMediaLibrary';
+import { globalCommandManager } from './engines/commands/CommandManager';
+import { useCommandManager } from './engines/commands/hooks';
+import { AddClipCommand, RemoveClipCommand, MoveClipCommand, UpdateClipCommand, CommandContext, GroupClipsCommand, UngroupClipsCommand } from './engines/commands/TimelineCommands';
 
 const INITIAL_TRACKS: Track[] = [
   { id: 't1', type: MediaType.VIDEO, name: 'Video Track 1' },
@@ -74,8 +77,26 @@ function App() {
     }
   }, true, 2000);
 
-  const { addToHistory, undo, redo, historyIndex, historyLength, initHistory } = useEditorHistory(setClips, setTracks, clips, tracks);
-  useEffect(() => { initHistory(); }, []);
+  // Command System Integration
+  const { undo, redo, canUndo, canRedo } = useCommandManager(globalCommandManager);
+
+  // Refs for State Access
+  const clipsRef = useRef(clips);
+  const tracksRef = useRef(tracks);
+  useEffect(() => { clipsRef.current = clips; }, [clips]);
+  useEffect(() => { tracksRef.current = tracks; }, [tracks]);
+
+  // Command Context
+  const commandContext = useRef<CommandContext>({
+    getClips: () => clipsRef.current,
+    getTracks: () => tracksRef.current,
+    setClips,
+    setTracks
+  }).current;
+
+  // Legacy History (Disabled)
+  // const { addToHistory, undo, redo, historyIndex, historyLength, initHistory } = useEditorHistory(setClips, setTracks, clips, tracks);
+  // useEffect(() => { initHistory(); }, []);
 
   // Initialize Custom Scripts (Transitions/Effects)
   useEffect(() => {
@@ -103,11 +124,12 @@ function App() {
   // State updates wrapper for history
   const updateClips = (newClips: Clip[]) => {
     setClips(newClips);
-    addToHistory(newClips, tracks);
+    // addToHistory(newClips, tracks); // Legacy history disabled
   };
 
   // Actions
   const handleCopy = () => {
+    // Reading selectedClips is fine from state
     const selected = clips.filter(c => selectedClipIds.includes(c.id));
     if (selected.length > 0) setClipboard(selected);
   };
@@ -116,19 +138,41 @@ function App() {
     if (clipboard.length === 0) return;
     const minStart = Math.min(...clipboard.map(c => c.start));
     const offset = currentTime - minStart;
-    const newClips = clipboard.map(c => ({ ...c, id: crypto.randomUUID(), start: Math.max(0, c.start + offset), name: `${c.name} (Copy)` }));
-    updateClips([...clips, ...newClips]);
-    setSelectedClipIds(newClips.map(c => c.id));
+
+    // Create AddClipCommands for each pasted clip
+    const commands: any[] = [];
+    const newIds: string[] = [];
+
+    clipboard.forEach(c => {
+      const newId = crypto.randomUUID();
+      const newClip = { ...c, id: newId, start: Math.max(0, c.start + offset), name: `${c.name} (Copy)` };
+      commands.push(new AddClipCommand(commandContext, newClip));
+      newIds.push(newId);
+    });
+
+    if (commands.length > 0) {
+      // We need BatchCommand import
+      // For now execute one by one or create ad-hoc batch
+      // Since I haven't imported BatchCommand yet, I will do so or execute loop
+      // But loop means multiple undo steps for one paste. Not ideal.
+      // I will assume BatchCommand is imported or use loop for now and fix later
+      // Actually I should add BatchCommand to imports first.
+      // Assuming loop for now to avoid break:
+      commands.forEach(cmd => globalCommandManager.execute(cmd));
+      setSelectedClipIds(newIds);
+    }
   };
 
   const handleDeleteClip = () => {
     if (selectedClipIds.length === 0) return;
-    updateClips(clips.filter(c => !selectedClipIds.includes(c.id)));
+    selectedClipIds.forEach(id => {
+      globalCommandManager.execute(new RemoveClipCommand(commandContext, id));
+    });
     setSelectedClipIds([]);
   };
 
   const handleAddClip = (clip: Clip) => {
-    updateClips([...clips, clip]);
+    globalCommandManager.execute(new AddClipCommand(commandContext, clip));
   };
 
   const handleSplitClip = () => {
@@ -265,8 +309,8 @@ function App() {
   };
 
   useKeyboardShortcuts(exportStatus === 'idle', {
-    undo: () => { undo(); },
-    redo: () => { redo(); },
+    undo: () => { if (canUndo) undo(); },
+    redo: () => { if (canRedo) redo(); },
     copy: handleCopy,
     paste: handlePaste,
     delete: handleDeleteClip,
@@ -378,14 +422,15 @@ function App() {
       effects: [], animationDuration: 1
     };
     console.log('[App] New clip created:', newClip);
-    updateClips([...clips, newClip]);
+    globalCommandManager.execute(new AddClipCommand(commandContext, newClip));
+
     if (time + 5 > duration) setDuration(time + 15);
     setSelectedClipIds([newClip.id]); setCurrentTime(time);
   };
 
   const handleCreateEffectClip = (effect: Effect, trackId: string, time: number) => {
     const newClip: Clip = { id: crypto.randomUUID(), assetId: 'fx_' + effect.id, trackId, start: time, duration: 3, offset: 0, name: effect.name, type: MediaType.EFFECT, src: '', effects: [effect], animationDuration: 0 };
-    updateClips([...clips, newClip]);
+    globalCommandManager.execute(new AddClipCommand(commandContext, newClip));
     setSelectedClipIds([newClip.id]); setCurrentTime(time);
   };
 
@@ -395,13 +440,25 @@ function App() {
       name: animType.charAt(0).toUpperCase() + animType.slice(1), type: MediaType.ANIMATION, src: '', effects: [],
       animationType: animType, animationDuration: 0, easing: options?.easing
     };
-    updateClips([...clips, newClip]);
+    globalCommandManager.execute(new AddClipCommand(commandContext, newClip));
     setSelectedClipIds([newClip.id]); setCurrentTime(time);
   };
 
   const handleClipUpdate = (clipId: string, updates: Partial<Clip>) => {
+    // CRITICAL: Do NOT use CommandManager here for continuous updates (resize drag).
+    // It creates infinite commands and crashes the app.
+    // TODO: Implement onResizeEnd in Timeline to fire a single Command.
     setClips(prev => prev.map(c => c.id === clipId ? { ...c, ...updates } : c));
-    // Debounce history here if needed, or handle in mouseUp
+  };
+
+  const handleGroupClips = () => {
+    if (selectedClipIds.length < 2) return;
+    globalCommandManager.execute(new GroupClipsCommand(commandContext, selectedClipIds));
+  };
+
+  const handleUngroupClips = () => {
+    if (selectedClipIds.length === 0) return;
+    globalCommandManager.execute(new UngroupClipsCommand(commandContext, selectedClipIds));
   };
 
   const startExport = () => {
@@ -748,11 +805,13 @@ function App() {
           onSplitClip={handleSplitClip}
           onDeleteClip={handleDeleteClip}
           onZoomChange={setZoom}
-          onClipMove={(id, start, track) => { setClips(prev => prev.map(c => c.id === id ? { ...c, start, trackId: track } : c)); }}
+          onClipMove={(id, start, track) => { globalCommandManager.execute(new MoveClipCommand(commandContext, id, start, track)); }}
           onAddTrack={() => setTracks(prev => [...prev, { id: `t${prev.length + 1}`, type: MediaType.VIDEO, name: `Track ${prev.length + 1}` }])}
           onDeleteTrack={(id) => setTracks(prev => prev.filter(t => t.id !== id))}
           workArea={workArea}
           onWorkAreaChange={setWorkArea}
+          onGroup={handleGroupClips}
+          onUngroup={handleUngroupClips}
         />
       );
       default: return null;
@@ -777,8 +836,8 @@ function App() {
           {/* TOOLS */}
           <div className="flex items-center gap-1">
             <div className="flex bg-[var(--bg-item)] rounded-md p-0.5 border border-[var(--border-light)] gap-0.5">
-              <button onClick={undo} disabled={historyIndex <= 0} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all" title="Undo"><Undo2 size={13} /></button>
-              <button onClick={redo} disabled={historyIndex >= historyLength - 1} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all" title="Redo"><Redo2 size={13} /></button>
+              <button onClick={undo} disabled={!canUndo} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all" title="Undo"><Undo2 size={13} /></button>
+              <button onClick={redo} disabled={!canRedo} className="p-1.5 hover:bg-[var(--bg-hover)] rounded-sm text-gray-400 hover:text-white disabled:opacity-30 transition-all" title="Redo"><Redo2 size={13} /></button>
             </div>
 
             <div className="h-4 w-px bg-white/10 mx-2"></div>

@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Clip, MediaType, Asset, ExportSettings } from '../types';
 import { Play, Pause, SkipBack, SkipForward, Maximize, Minimize } from 'lucide-react';
-import { renderCanvas } from '../utils/renderer';
+import { renderCanvas } from '../engines/render/CanvasRenderer';
 import TransformOverlay from './TransformOverlay';
 import { renderCache } from '../services/renderCache';
 

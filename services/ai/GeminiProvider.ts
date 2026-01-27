@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getApiKey } from "./apiKeyService";
-import { Asset, Clip, Track } from "../types";
+import { getApiKey } from "../apiKeyService";
+import { Asset, Clip, Track } from "../../types";
 
 /* ------------------ GLOBAL TYPES ------------------ */
 declare global {

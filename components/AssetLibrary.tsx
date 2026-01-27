@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Asset, MediaType, Effect, AnimationType, EasingType } from '../types';
-import { generateImageAsset, generateVideoAsset, generateScript, generateCSSFilter, generateTransitionSettings } from '../services/geminiService';
+import { generateImageAsset, generateVideoAsset, generateScript, generateCSSFilter, generateTransitionSettings } from '../services/ai/GeminiProvider';
 import { Search, Plus, Filter, Music, Type, Image as ImageIcon, Video, File, X, ChevronRight, Play, Loader2, Sparkles, Code, Shapes, Upload, Trash2, Square, Circle, ArrowRight, Star, Move, Wand2, Palette, FileText } from 'lucide-react';
 import { validateTransitionCode, registerTransition, getTransition, getAllTransitions, subscribeToRegistry } from '../transitions/registry';
 import AudioBrowser from './AudioBrowser';

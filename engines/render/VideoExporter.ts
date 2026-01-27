@@ -1,5 +1,5 @@
-import { generateImageAsset } from './geminiService';
-import { Asset, Clip, MediaType, Track } from '../types';
+import { generateImageAsset } from '../../services/ai/GeminiProvider';
+import { Asset, Clip, MediaType, Track } from '../../types';
 
 interface VideoGenerationOptions {
     theme: string;

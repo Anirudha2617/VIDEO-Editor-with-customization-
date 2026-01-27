@@ -17,7 +17,7 @@ import {
 } from '../services/codeAssetStorage';
 import {
     generateCodeSnippet
-} from '../services/geminiService';
+} from '../services/ai/GeminiProvider';
 import { codeTemplates, CodeTemplate } from '../services/codeTemplates';
 import { registerTransition } from '../transitions/registry';
 import { registerEffect } from '../effects/registry';

@@ -49,6 +49,8 @@ interface TimelineProps {
         end: number;
         enabled: boolean;
     }) => void;
+    onGroup: () => void;
+    onUngroup: () => void;
 }
 
 const Timeline: React.FC<TimelineProps> = ({
@@ -72,7 +74,9 @@ const Timeline: React.FC<TimelineProps> = ({
     onAddTrack,
     onDeleteTrack,
     workArea,
-    onWorkAreaChange
+    onWorkAreaChange,
+    onGroup,
+    onUngroup
 }) => {
     const timelineRef = useRef<HTMLDivElement>(null);
     const rulerRef = useRef<HTMLDivElement>(null);
@@ -93,6 +97,13 @@ const Timeline: React.FC<TimelineProps> = ({
         onSelectClip,
         onClearSelection,
         selectedClipIds
+    });
+
+    // Calculate Group capabilities
+    const canGroup = selectedClipIds.length > 1;
+    const canUngroup = selectedClipIds.some(id => {
+        const clip = clips.find(c => c.id === id);
+        return clip && !!clip.groupId;
     });
 
     /* -------------------------------------------------- */
@@ -475,13 +486,20 @@ const Timeline: React.FC<TimelineProps> = ({
                 </div>
 
                 {/* Context Menu */}
-                <TimelineContextMenu
-                    visible={contextMenu.visible}
-                    position={{ x: contextMenu.x, y: contextMenu.y }}
-                    onClose={() => setContextMenu(prev => ({ ...prev, visible: false }))}
-                    onDelete={onDeleteClip}
-                    onSplit={onSplitClip}
-                />
+                {/* Context Menu */}
+                {contextMenu.visible && (
+                    <TimelineContextMenu
+                        x={contextMenu.x}
+                        y={contextMenu.y}
+                        onClose={() => setContextMenu(prev => ({ ...prev, visible: false }))}
+                        onDelete={onDeleteClip}
+                        onSplit={onSplitClip}
+                        onGroup={onGroup}
+                        onUngroup={onUngroup}
+                        canGroup={canGroup}
+                        canUngroup={canUngroup}
+                    />
+                )}
             </div>
         </div>
     );

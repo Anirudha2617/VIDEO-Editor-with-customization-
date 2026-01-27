@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Asset, MediaType } from '../../types';
-import { generateImageAsset, generateVideoAsset, generateAudioAsset, generateTTSAsset } from '../../services/geminiService';
+import { generateImageAsset, generateVideoAsset, generateAudioAsset, generateTTSAsset } from '../../services/ai/GeminiProvider';
 import {
     ImageIcon, Video, Music, Mic, Sparkles, Loader2, Wand2, Layers,
     PlayCircle, Download, RefreshCw

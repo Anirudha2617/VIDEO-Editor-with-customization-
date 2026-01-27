@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Clip, AnimationType, EasingType, MediaType } from '../../types';
 import { Move, Clock, ArrowRightFromLine, ArrowLeftFromLine, Play, Code } from 'lucide-react';
 import { getAllTransitions, getTransition, subscribeToRegistry } from '../../transitions/registry';
-import { renderCanvas } from '../../utils/renderer';
+// import { renderFrame } from '../../engines/render/CanvasRenderer';
 
 interface TransitionSettingsProps {
     clip: Clip;
