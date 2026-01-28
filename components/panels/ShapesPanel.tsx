@@ -1,5 +1,5 @@
 import React from 'react';
-import { MediaType } from '../../types';
+import { MediaType } from '../../models';
 import { Square, Circle, ArrowRight, Star, Shapes } from 'lucide-react';
 
 interface ShapesPanelProps {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Download, Loader2, Image as ImageIcon } from 'lucide-react';
 import { searchStockMedia, StockMediaResult, STOCK_MEDIA_SUGGESTIONS, downloadStockMedia } from '../services/stockMediaService';
-import { Asset, MediaType } from '../types';
+import { Asset, MediaType } from '../models';
 
 interface StockMediaBrowserProps {
     onAddMedia: (asset: Asset) => void;
@@ -39,7 +39,11 @@ const StockMediaBrowser: React.FC<StockMediaBrowserProps> = ({ onAddMedia }) => 
                 id: `stock_${Date.now()}_${media.id}`,
                 type: media.type === 'video' ? MediaType.VIDEO : MediaType.IMAGE,
                 src: mediaUrl,
-                name: `Stock ${media.type} - ${media.tags.split(',')[0]}`
+                name: `Stock ${media.type} - ${media.tags.split(',')[0]}`,
+                // Placeholders - in a real app these should be read from the file
+                width: 1920,
+                height: 1080,
+                duration: media.type === 'video' ? 10 : undefined
             };
 
             onAddMedia(newAsset);

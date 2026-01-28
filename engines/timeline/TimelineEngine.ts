@@ -1,4 +1,4 @@
-import { Clip, MediaType } from '../../types';
+import { Clip, MediaType } from '../../models';
 
 export class TimelineEngine {
     static SIDEBAR_WIDTH = 200;

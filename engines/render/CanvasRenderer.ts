@@ -1,10 +1,8 @@
 
-import { Clip, MediaType, Asset, Effect } from '../../types';
+import { Clip, MediaType, Asset, Effect, Transition, TransitionContext, EffectContext } from '../../models';
 import { getEasedProgress, getFillStyle } from '../../utils/animation';
 import { getTransition } from '../../transitions/registry';
-import { TransitionContext } from '../../transitions/types';
 import { getEffect } from '../../effects/registry';
-import { EffectContext } from '../../effects/types';
 
 // --- Reverting Canvas Pool due to rendering artifacts/corruption ---
 // Using fresh canvases ensures no dirty state leaks between frames

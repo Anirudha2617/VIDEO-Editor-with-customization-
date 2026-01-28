@@ -1,5 +1,4 @@
-import { Asset, Clip, Effect } from '../types';
-import { Transition } from '../transitions/types';
+import { Clip, Track, Asset, Project, MediaType, Effect, Transition } from '../models';
 
 export interface ProjectState {
     version: string;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clip, MediaType } from '../../types';
+import { Clip, MediaType } from '../../models';
 import {
     Film,
     Image as ImageIcon,

@@ -1,5 +1,5 @@
 import { generateImageAsset } from '../../services/ai/GeminiProvider';
-import { Asset, Clip, MediaType, Track } from '../../types';
+import { Asset, Clip, MediaType, Track } from '../../models';
 
 interface VideoGenerationOptions {
     theme: string;
@@ -151,7 +151,9 @@ export const generateVideoTimeline = async (
                 id: crypto.randomUUID(),
                 type: MediaType.IMAGE,
                 src: imageUrl,
-                name: `AI: ${scene.imagePrompt.slice(0, 20)}...`
+                name: `AI: ${scene.imagePrompt.slice(0, 20)}...`,
+                width: 1920,
+                height: 1080
             };
             assets.push(asset);
 

@@ -1,5 +1,5 @@
 
-import { Project, Asset, MediaType } from '../types';
+import { Project, Asset, MediaType } from '../models';
 
 /**
  * Converts a Blob to a Base64 string.

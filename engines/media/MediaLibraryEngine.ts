@@ -102,4 +102,32 @@ export class MediaLibraryEngine {
             resolve({});
         });
     }
+
+    /**
+     * Generates a unique name by appending (n) if conflict exists.
+     * e.g., "image.png" -> "image (1).png" -> "image (2).png"
+     */
+    static getUniqueName(name: string, existingNames: string[]): string {
+        if (!existingNames.includes(name)) return name;
+
+        // Split extension
+        const lastDot = name.lastIndexOf('.');
+        let base = name;
+        let ext = '';
+
+        if (lastDot > 0) {
+            base = name.substring(0, lastDot);
+            ext = name.substring(lastDot);
+        }
+
+        let counter = 1;
+        let candidate = `${base} (${counter})${ext}`;
+
+        while (existingNames.includes(candidate)) {
+            counter++;
+            candidate = `${base} (${counter})${ext}`;
+        }
+
+        return candidate;
+    }
 }

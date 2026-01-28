@@ -1,4 +1,4 @@
-import { Clip, Track, Asset, MediaType } from '../../types';
+import { Clip, Track, Asset, MediaType } from '../../models';
 
 export interface ParseResult {
     clips: Clip[];

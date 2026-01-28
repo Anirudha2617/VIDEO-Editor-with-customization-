@@ -1,7 +1,7 @@
 
 
 import React, { useRef, useCallback } from 'react';
-import { Clip, Track } from '../types';
+import { Clip, Track } from '../models';
 
 export const useEditorHistory = (
   setClips: React.Dispatch<React.SetStateAction<Clip[]>>,

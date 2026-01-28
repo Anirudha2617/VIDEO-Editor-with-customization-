@@ -1,12 +1,12 @@
 
 import React from 'react';
-import { Clip, MediaType } from '../types';
+import { Clip, Effect, EffectDefinition, MediaType, CustomFont, Asset } from '../models';
 import { X, Trash2, Layers, Settings2, Film, Image as ImageIcon, Move, Wand2, Bold, Italic, Underline, Superscript, Subscript } from 'lucide-react';
 import { TransitionSettings } from './properties/TransitionSettings';
 import { EffectSettings } from './properties/EffectSettings';
 import AudioSettings from './properties/AudioSettings';
 import { FontPicker } from './FontPicker';
-import { CustomFont } from '../types';
+
 
 interface PropertiesPanelProps {
   clips: Clip[];
@@ -19,20 +19,70 @@ interface PropertiesPanelProps {
   customFonts?: CustomFont[];
   onUploadFont?: (font: CustomFont) => void;
   timerInputRef?: React.RefObject<HTMLInputElement>;
+  assets?: Asset[];
 }
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ clips, allClips = [], onUpdate, onDelete, onClose, onSeek, onDetachAudio, customFonts = [], onUploadFont = () => { }, timerInputRef }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ clips, allClips = [], onUpdate, onDelete, onClose, onSeek, onDetachAudio, customFonts = [], onUploadFont = () => { }, timerInputRef, assets = [] }) => {
   if (clips.length === 0) return null;
 
   if (clips.length > 1) {
+    const getCommon = <K extends keyof Clip>(key: K): any => {
+      const first = clips[0][key];
+      return clips.every(c => c[key] === first) ? first : '';
+    };
+
     return (
-      <div className="w-[300px] bg-[#18181b] border-l border-[#27272a] flex flex-col h-full z-20">
-        <div className="h-12 border-b border-[#27272a] flex items-center justify-between px-4 bg-[#202024]">
-          <span className="font-semibold text-sm text-gray-200 flex items-center gap-2"><Layers size={14} /> Selection ({clips.length})</span>
+      <div className="w-full bg-[var(--bg-panel)] backdrop-blur-xl border-l border-[var(--border-base)] flex flex-col h-full z-20 shadow-2xl">
+        <div className="h-10 border-b border-[#27272a] flex items-center justify-between px-4 bg-[#202024]">
+          <span className="font-semibold text-xs text-gray-200 flex items-center gap-2"><Layers size={14} /> Selection ({clips.length})</span>
           <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={16} /></button>
         </div>
-        <div className="p-4 space-y-4">
-          <button onClick={onDelete} className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-3 rounded text-xs font-bold transition"><Trash2 size={14} /> Delete All</button>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-5">
+
+          {/* Shared Transform */}
+          <div className="space-y-3">
+            <label className="text-[9px] uppercase font-bold text-[var(--text-muted)] tracking-wider flex items-center gap-2">Transform<span className="h-px bg-[var(--border-base)] flex-1"></span></label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] text-[var(--text-secondary)]">Scale</label>
+                <input type="number" step="0.1" placeholder={getCommon('scale') === '' ? "Mixed" : ""} value={getCommon('scale')} onChange={(e) => onUpdate({ scale: parseFloat(e.target.value) })} className="w-full bg-[var(--bg-input)] border border-[var(--border-light)] rounded-sm px-2 py-1 text-xs text-white focus:border-[var(--accent-primary)] outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-[var(--text-secondary)]">Rotate</label>
+                <input type="number" placeholder={getCommon('rotation') === '' ? "Mixed" : ""} value={getCommon('rotation')} onChange={(e) => onUpdate({ rotation: parseFloat(e.target.value) })} className="w-full bg-[var(--bg-input)] border border-[var(--border-light)] rounded-sm px-2 py-1 text-xs text-white focus:border-[var(--accent-primary)] outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-[var(--text-secondary)]">X</label>
+                <input type="number" placeholder={getCommon('x') === '' ? "Mixed" : ""} value={getCommon('x')} onChange={(e) => onUpdate({ x: parseFloat(e.target.value) })} className="w-full bg-[var(--bg-input)] border border-[var(--border-light)] rounded-sm px-2 py-1 text-xs text-white focus:border-[var(--accent-primary)] outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-[var(--text-secondary)]">Y</label>
+                <input type="number" placeholder={getCommon('y') === '' ? "Mixed" : ""} value={getCommon('y')} onChange={(e) => onUpdate({ y: parseFloat(e.target.value) })} className="w-full bg-[var(--bg-input)] border border-[var(--border-light)] rounded-sm px-2 py-1 text-xs text-white focus:border-[var(--accent-primary)] outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-[var(--text-secondary)]">Opacity</label>
+                <input type="number" min="0" max="1" step="0.1" placeholder={getCommon('opacity') === '' ? "Mixed" : ""} value={getCommon('opacity')} onChange={(e) => onUpdate({ opacity: parseFloat(e.target.value) })} className="w-full bg-[var(--bg-input)] border border-[var(--border-light)] rounded-sm px-2 py-1 text-xs text-white focus:border-[var(--accent-primary)] outline-none" />
+              </div>
+            </div>
+          </div>
+
+          {/* Color (if applicable) */}
+          <div className="space-y-1">
+            <label className="text-[10px] text-[var(--text-secondary)]">Background Color</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={getCommon('backgroundColor') || "#000000"}
+                onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                className="h-8 w-8 bg-[var(--bg-input)] border border-[var(--border-light)] rounded cursor-pointer"
+              />
+              {getCommon('backgroundColor') === '' && <span className="text-[10px] text-gray-500 italic">Mixed</span>}
+            </div>
+          </div>
+
+          <div className="pt-4 mt-4 border-t border-[var(--border-base)] space-y-2">
+            <button onClick={onDelete} className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-3 rounded text-xs font-bold transition"><Trash2 size={14} /> Delete Selected</button>
+          </div>
         </div>
       </div>
     );
@@ -96,7 +146,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ clips, allClips = [],
 
         {/* Transitions Section */}
         {(isMediaClip || clip.type === MediaType.ANIMATION) && (
-          <TransitionSettings clip={clip} allClips={allClips} onUpdate={onUpdate} onSeek={onSeek} />
+          <TransitionSettings clip={clip} allClips={allClips} onUpdate={onUpdate} onSeek={onSeek} assets={assets} />
         )}
 
         {/* Audio Settings */}

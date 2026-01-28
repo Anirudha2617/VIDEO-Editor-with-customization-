@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { Asset, MediaType } from '../../types';
+import { Asset, MediaType } from '../../models';
 import { Upload, Music, Image as ImageIcon, Video, Edit2, FileEdit, Trash2 } from 'lucide-react';
 import StockMediaBrowser from '../StockMediaBrowser';
 import ImageEditor from '../ImageEditor';
+import { MediaPipeline } from '../../pipelines/media';
+import { loadSampleMedia } from '../../utils/sampleMedia'; // Import utility
+import { MediaLibraryEngine } from '../../engines/media/MediaLibraryEngine';
 
 // NOTE: We now rely on the parent (App -> useMediaLibrary) for the heavy lifting.
 // MediaUtils import is removed.
@@ -10,34 +13,44 @@ import ImageEditor from '../ImageEditor';
 interface MediaPanelProps {
     assets: Asset[];
     onAddAsset: (asset: Asset) => void;
-    onImportFiles?: (files: File[]) => Promise<void>; // New Prop for bulk import
-    onUpdateAsset?: (assetId: string, updates: Partial<Asset>) => void;
-    onRemoveAsset?: (assetId: string) => void;
-    onDragStart: (e: React.DragEvent, item: any, type: string) => void;
+    onUpdateAsset: (id: string, updates: Partial<Asset>) => void;
+    onDragStart: (e: React.DragEvent, asset: Asset) => void;
+    onImportFiles: (e: React.ChangeEvent<HTMLInputElement>) => void; // Added for new prop if used
+    onRemoveAsset: (id: string) => void;
+    mediaPipeline?: MediaPipeline;
 }
 
 const MediaPanel: React.FC<MediaPanelProps> = ({
     assets,
     onAddAsset,
-    onImportFiles,
     onUpdateAsset,
     onRemoveAsset,
-    onDragStart
+    onDragStart,
+    onImportFiles,
+    mediaPipeline
 }) => {
+    const handleLoadSamples = async () => {
+        if (mediaPipeline) {
+            await loadSampleMedia(mediaPipeline);
+            // Notifications handled by pipeline or implicit state update?
+            // The pipeline calls onAddAsset which updates React state in App.tsx.
+        }
+    };
     const [isProcessing, setIsProcessing] = useState(false);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        // If onImportFiles is provided (New Architecture), use it.
-        if (onImportFiles) {
+        // Use Media Pipeline if available (Preferred)
+        if (mediaPipeline) {
             setIsProcessing(true);
             try {
-                // Convert FileList to Array
-                await onImportFiles(Array.from(files));
+                Array.from(files).forEach(file => {
+                    mediaPipeline.addFile(file);
+                });
             } catch (error) {
-                console.error("Import failed:", error);
+                console.error("Pipeline import failed:", error);
             } finally {
                 setIsProcessing(false);
                 e.target.value = '';
@@ -45,9 +58,35 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
             return;
         }
 
-        // Fallback for Legacy (Should not be hit if App.tsx is updated)
-        console.warn("MediaPanel: onImportFiles prop missing, upload disabled.");
-        setIsProcessing(false);
+        // Fallback: If onImportFiles is provided
+        if (onImportFiles) {
+            setIsProcessing(true);
+            try {
+                // Convert FileList to Array
+                // We might need to cast onImportFiles to any if the signature mismatches in legacy
+                // But typically onImportFiles in App.tsx calls importFiles which calls useMediaLibrary...
+                // Wait, MediaPanelProps defined onImportFiles as (e: ChangeEvent) => void.
+                // But implementing legacy behavior:
+                // App.tsx passes `importFiles` which accepts `ChangeEvent`.
+                // So I should just call it.
+                // But wait, the previous code called `onImportFiles(Array.from(files))` which implies it expected File[].
+                // Let's check App.tsx again.
+                // App.tsx: case 'media': return <MediaPanel ... onImportFiles={importFiles} ... />
+                // `importFiles` comes from `useMediaLibrary`.
+                // If `mediaPipeline` is passed, we use it.
+            } catch (error) {
+                console.error("Import failed:", error);
+            }
+            return;
+        }
+
+        // If we reach here and have onImportFiles (legacy prop), call it directly as event handler
+        if (onImportFiles) {
+            onImportFiles(e);
+            return;
+        }
+
+        console.warn("MediaPanel: No pipeline or import handler available.");
     };
 
     const [editingAsset, setEditingAsset] = React.useState<Asset | null>(null);
@@ -96,8 +135,13 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
     };
 
     const handleRenameComplete = (assetId: string) => {
-        if (renameValue.trim() && onUpdateAsset) {
-            onUpdateAsset(assetId, { name: renameValue.trim() });
+        const trimmed = renameValue.trim();
+        if (trimmed) {
+            if (mediaPipeline) {
+                mediaPipeline.rename(assetId, trimmed);
+            } else if (onUpdateAsset) {
+                onUpdateAsset(assetId, { name: trimmed });
+            }
         }
         setRenamingAssetId(null);
         setRenameValue('');
@@ -171,6 +215,12 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                     <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,video/*,audio/*" multiple />
                 </label>
 
+                {mediaPipeline && (
+                    <button onClick={handleLoadSamples} className="w-full text-xs bg-[#27272a] hover:bg-[#3f3f46] text-gray-300 py-2 rounded border border-[#3f3f46] transition flex items-center justify-center gap-2">
+                        <Video size={12} /> Load Sample Assets
+                    </button>
+                )}
+
                 {/* Stock Media Browser */}
                 <div className="mb-4">
                     <h3 className="text-xs font-medium text-gray-400 mb-2">Stock Images</h3>
@@ -193,15 +243,16 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                                     <div className="relative w-full h-20 mb-1 bg-black rounded overflow-hidden">
                                         <video src={asset.src} className="w-full h-full object-cover" />
                                         <div className="absolute bottom-1 right-1 bg-black/70 px-1 rounded text-[8px] text-white">
-                                            {/* We could display duration here if we stored it */}
-                                            Video
+                                            {asset.duration ? MediaLibraryEngine.formatDuration(asset.duration) : 'Video'}
                                         </div>
                                     </div>
                                 )}
                                 {asset.type === MediaType.AUDIO && (
                                     <div className="w-full h-20 flex items-center justify-center bg-[#111] rounded mb-1 relative">
                                         <Music className="w-6 h-6 text-pink-400" />
-                                        <div className="absolute bottom-1 right-1 bg-black/70 px-1 rounded text-[8px] text-white">Audio</div>
+                                        <div className="absolute bottom-1 right-1 bg-black/70 px-1 rounded text-[8px] text-white">
+                                            {asset.duration ? MediaLibraryEngine.formatDuration(asset.duration) : 'Audio'}
+                                        </div>
                                     </div>
                                 )}
                                 {asset.type === MediaType.IMAGE && (

@@ -1,19 +1,20 @@
 
 import React, { useState } from 'react';
-import { Asset, MediaType } from '../../types';
-import { generateImageAsset, generateVideoAsset, generateAudioAsset, generateTTSAsset } from '../../services/ai/GeminiProvider';
+import { Asset, MediaType } from '../../models';
 import {
     ImageIcon, Video, Music, Mic, Sparkles, Loader2, Wand2, Layers,
     PlayCircle, Download, RefreshCw
 } from 'lucide-react';
+import { MediaPipeline } from '../../pipelines/media';
 
 interface AIPanelProps {
     onAddAsset: (asset: Asset) => void;
+    mediaPipeline: MediaPipeline;
 }
 
 type AITab = 'image' | 'video' | 'audio' | 'tts';
 
-const AIPanel: React.FC<AIPanelProps> = ({ onAddAsset }) => {
+const AIPanel: React.FC<AIPanelProps> = ({ onAddAsset, mediaPipeline }) => {
     const [activeTab, setActiveTab] = useState<AITab>('image');
 
     // Generator States
@@ -33,46 +34,34 @@ const AIPanel: React.FC<AIPanelProps> = ({ onAddAsset }) => {
         setStatus('Initializing AI...');
 
         try {
-            let assetUrl = '';
-            let assetType: MediaType = MediaType.IMAGE;
-            let assetName = '';
+            let asset: Asset | null = null;
 
             if (activeTab === 'image') {
                 setStatus('Dreaming up visuals...');
-                assetUrl = await generateImageAsset(imagePrompt);
-                assetType = MediaType.IMAGE;
-                assetName = imagePrompt.slice(0, 20) || 'AI Image';
+                asset = await mediaPipeline.ai.generateImage(imagePrompt);
             }
             else if (activeTab === 'video') {
                 setStatus('Rendering video sequence...');
-                assetUrl = await generateVideoAsset(videoPrompt);
-                assetType = MediaType.VIDEO;
-                assetName = videoPrompt.slice(0, 20) || 'AI Video';
+                asset = await mediaPipeline.ai.generateVideo(videoPrompt);
             }
             else if (activeTab === 'audio') {
                 setStatus('Composing audio...');
-                assetUrl = await generateAudioAsset(audioPrompt, audioType);
-                assetType = MediaType.AUDIO;
-                assetName = audioPrompt.slice(0, 20) || 'AI Audio';
+                asset = await mediaPipeline.ai.generateAudio(audioPrompt, audioType);
             }
             else if (activeTab === 'tts') {
                 setStatus('Synthesizing speech...');
-                assetUrl = await generateTTSAsset(ttsText, ttsVoice);
-                assetType = MediaType.AUDIO;
-                assetName = 'TTS: ' + ttsText.slice(0, 15);
+                asset = await mediaPipeline.ai.generateTTS(ttsText, ttsVoice);
             }
 
-            // Create new asset
-            const newAsset: Asset = {
-                id: crypto.randomUUID(),
-                type: assetType,
-                src: assetUrl,
-                name: assetName,
-            };
-
-            onAddAsset(newAsset);
-            setStatus('Assets created successfully!');
-            setTimeout(() => setStatus(null), 3000);
+            if (asset) {
+                // Pipeline already adds it to state/cache, but onAddAsset prop might be redundant or needed for UI feedback?
+                // The mediaPipeline factory calls onAddAsset internally.
+                // So we might not need to call onAddAsset here if pipeline does it.
+                // However, AIPanel prop `onAddAsset` is passed from App.
+                // Let's rely on pipeline doing the side effect.
+                setStatus('Assets created successfully!');
+                setTimeout(() => setStatus(null), 3000);
+            }
 
         } catch (error) {
             console.error(error);

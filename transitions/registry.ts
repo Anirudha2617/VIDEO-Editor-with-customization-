@@ -1,4 +1,4 @@
-import { Transition } from './types';
+import { Transition } from '../models';
 import { fadeTransition } from './library/fade';
 import { wipeTransition } from './library/wipe';
 import { slideTransition } from './library/slide';

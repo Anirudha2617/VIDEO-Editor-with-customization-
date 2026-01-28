@@ -1,4 +1,4 @@
-import { Clip } from '../../types';
+import { Clip } from '../../models';
 
 export function getTransformTargets(
     clip: Clip,

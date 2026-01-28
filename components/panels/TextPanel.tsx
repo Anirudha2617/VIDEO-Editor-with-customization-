@@ -1,5 +1,5 @@
 import React from 'react';
-import { Asset, MediaType } from '../../types';
+import { Asset, MediaType } from '../../models';
 import { Type } from 'lucide-react';
 
 interface TextPanelProps {

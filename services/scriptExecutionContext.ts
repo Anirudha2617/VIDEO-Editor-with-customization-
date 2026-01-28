@@ -1,8 +1,8 @@
-import { Asset, Clip, Track, MediaType, Effect, AnimationType } from '../types';
-import { generateImageAsset } from './ai/GeminiProvider';
-import { registerTransition as registerTransitionInRegistry } from '../transitions/registry';
-import { Transition, TransitionContext, TransitionResult } from '../transitions/types';
-import { MediaPipeline, createMediaPipeline } from '../pipelines/media';
+import { Asset, Clip, Track, MediaType, Effect, AnimationType, Transition, TransitionContext, TransitionResult } from '../models';
+import { registerTransition } from '../transitions/registry';
+import { MediaPipeline } from '../pipelines/media';
+import { TimelinePipeline } from '../pipelines/timeline';
+import { ProjectPipeline } from '../pipelines/project';
 
 
 export interface ClipConfig {
@@ -24,9 +24,6 @@ export interface TransitionConfig {
 }
 
 export interface ScriptExecutionContext {
-    // Pipeline Endpoints
-    media: MediaPipeline;
-
     // Asset references (auto-injected)
     assets: Record<string, string>;
 
@@ -36,7 +33,7 @@ export interface ScriptExecutionContext {
     updateClip: (id: string, updates: Partial<Clip>) => void;
     getClip: (id: string) => Clip | undefined;
 
-    // Asset creation
+    // Asset creation (Delegated to Media Pipeline)
     addTextAsset: (text: string, options?: {
         fontSize?: number;
         fontColor?: string;
@@ -53,10 +50,10 @@ export interface ScriptExecutionContext {
     // Transition operations
     addTransition: (clipId: string, type: 'in' | 'out', transition: AnimationType, duration?: number) => void;
 
-    // External resources
+    // External resources (Delegated to Media Pipeline)
     addAssetFromUrl: (url: string, name?: string) => Promise<Asset>;
 
-    // AI operations
+    // AI operations (Delegated to Media Pipeline)
     ai: {
         generateImage: (prompt: string) => Promise<Asset>;
     };
@@ -69,64 +66,28 @@ export interface ScriptExecutionContext {
 }
 
 export const createExecutionContext = (
-    assets: Asset[],
     clips: Clip[],
     tracks: Track[],
+    mediaPipeline: MediaPipeline,
     onAddClip: (clip: Clip) => void,
     onUpdateClip: (id: string, updates: Partial<Clip>) => void,
     onRemoveClip: (id: string) => void,
-    onAddAsset: (asset: Asset) => void,
-    onRemoveAsset: (id: string) => void,
-    onUpdateAsset: (id: string, updates: Partial<Asset>) => void,
     onDisplay: (content: any) => void
 ): ScriptExecutionContext => {
 
-    // Runtime cache for newly created assets (fixes race condition)
-    const runtimeAssets: Asset[] = [];
-
-    // Initialize Pipelines
-    const mediaPipeline = createMediaPipeline(assets, onAddAsset, onUpdateAsset, onRemoveAsset, runtimeAssets);
+    // Create asset name map
     const assetMap: Record<string, string> = {};
-    assets.forEach(asset => {
+    mediaPipeline.getAll().forEach(asset => {
         const safeName = asset.name.replace(/[^a-zA-Z0-9]/g, '_');
         assetMap[safeName] = asset.id;
     });
 
-    // Runtime cache for newly created assets (fixes race condition)
-
-
-    // Helper to resolve asset ID from name or ID
-    const resolveAssetId = (nameOrId: string): string => {
-        return assetMap[nameOrId] || nameOrId;
-    };
-
-    // Helper to find asset (checks runtime cache first)
-    const findAsset = (assetIdOrName: string): Asset | undefined => {
-        let assetId = resolveAssetId(assetIdOrName);
-
-        // Check runtime cache first (newly created assets)
-        let asset = runtimeAssets.find(a => a.id === assetId || a.name === assetIdOrName);
-
-        // Then check original assets array
-        if (!asset) {
-            asset = assets.find(a => a.id === assetId);
-        }
-
-        // Try finding by name directly
-        if (!asset) {
-            asset = assets.find(a => a.name === assetIdOrName) ||
-                runtimeAssets.find(a => a.name === assetIdOrName);
-        }
-
-        return asset;
-    };
-
     const context: ScriptExecutionContext = {
-        media: mediaPipeline,
         assets: assetMap,
 
         addClip: (assetIdOrName: string, config: ClipConfig) => {
-            let asset = findAsset(assetIdOrName);
+            // Use Media Pipeline to find asset
+            let asset = mediaPipeline.getById(assetIdOrName) || mediaPipeline.getByName(assetIdOrName);
 
             // Handle Virtual Assets (Animation/Shape/Effect) if still not found
             if (!asset) {
@@ -161,7 +122,7 @@ export const createExecutionContext = (
             }
 
             if (!asset) {
-                throw new Error(`Asset not found: ${assetIdOrName}`);
+                throw new Error(`Asset not found: ${assetIdOrName} `);
             }
 
             const trackId = tracks[config.track - 1]?.id || tracks[0]?.id;
@@ -231,7 +192,7 @@ export const createExecutionContext = (
         addEffect: (clipId: string, effect: Partial<Effect>) => {
             const clip = clips.find(c => c.id === clipId);
             if (!clip) {
-                throw new Error(`Clip not found: ${clipId}`);
+                throw new Error(`Clip not found: ${clipId} `);
             }
 
             const newEffect: Effect = {
@@ -248,37 +209,13 @@ export const createExecutionContext = (
         },
 
         addTextAsset: (text: string, options = {}) => {
-            const asset: Asset = {
-                id: crypto.randomUUID(),
-                type: MediaType.TEXT,
-                src: '', // Text assets don't need a source file
-                name: text.substring(0, 30) || 'Text'
-            };
-
-            // Store text properties that will be used when creating clips
-            (asset as any).textProps = {
-                text,
-                fontSize: options.fontSize || 48,
-                fontColor: options.fontColor || '#ffffff',
-                fontFamily: options.fontFamily || 'Arial',
-                isBold: options.isBold || false,
-                backgroundColor: options.backgroundColor,
-                borderRadius: options.borderRadius || 0,
-                padding: options.padding || 10
-            };
-
-            // Add to runtime cache FIRST (fixes race condition)
-            runtimeAssets.push(asset);
-
-            // Then notify React state
-            onAddAsset(asset);
-            return asset;
+            return mediaPipeline.addText(text, options);
         },
 
         addTransition: (clipId: string, type: 'in' | 'out', transition: AnimationType, duration = 1) => {
             const clip = clips.find(c => c.id === clipId);
             if (!clip) {
-                throw new Error(`Clip not found: ${clipId}`);
+                throw new Error(`Clip not found: ${clipId} `);
             }
 
             const updates: Partial<Clip> = {};
@@ -295,20 +232,13 @@ export const createExecutionContext = (
             onUpdateClip(clipId, updates);
         },
 
-        addAssetFromUrl: mediaPipeline.addFromUrl,
+        addAssetFromUrl: async (url: string, name?: string) => {
+            return mediaPipeline.addFromUrl(url, name);
+        },
+
         ai: {
             generateImage: async (prompt: string) => {
-                const imageUrl = await generateImageAsset(prompt);
-
-                const asset: Asset = {
-                    id: crypto.randomUUID(),
-                    type: MediaType.IMAGE,
-                    src: imageUrl,
-                    name: prompt.slice(0, 30)
-                };
-
-                onAddAsset(asset);
-                return asset;
+                return mediaPipeline.ai.generateImage(prompt);
             }
         },
 
@@ -357,8 +287,8 @@ export const createExecutionContext = (
                 }
             };
 
-            registerTransitionInRegistry(transition);
-            onDisplay(`✓ Registered transition: ${config.name}`);
+            registerTransition(transition);
+            onDisplay(`✓ Registered transition: ${config.name} `);
         },
 
         display: (content: any) => {

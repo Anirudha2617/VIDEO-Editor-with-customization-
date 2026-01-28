@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Download, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
-import { ExportSettings } from '../types';
+import { ExportSettings } from '../models';
 
 interface ExportPanelProps {
     settings: ExportSettings;

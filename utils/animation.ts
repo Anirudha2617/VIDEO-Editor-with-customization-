@@ -1,5 +1,5 @@
 
-import { EasingType } from '../types';
+import { EasingType } from '../models';
 
 export const getEasedProgress = (t: number, type: EasingType = 'linear'): number => {
   const time = Math.max(0, Math.min(1, t));

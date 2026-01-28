@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clip, MediaType } from '../../types';
+import { Clip, MediaType } from '../../models';
 import { Volume2, VolumeX, TrendingUp, TrendingDown, Music } from 'lucide-react';
 
 interface AudioSettingsProps {

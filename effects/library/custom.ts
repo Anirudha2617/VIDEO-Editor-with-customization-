@@ -1,4 +1,4 @@
-import { EffectDefinition, EffectContext, EffectResult } from '../types';
+import { EffectDefinition, EffectContext, EffectResult } from '../../models';
 
 export const customEffect: EffectDefinition = {
     id: 'custom',

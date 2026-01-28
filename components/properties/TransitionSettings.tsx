@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Clip, AnimationType, EasingType, MediaType } from '../../types';
+import { Clip, AnimationType, EasingType, MediaType } from '../../models';
 import { Move, Clock, ArrowRightFromLine, ArrowLeftFromLine, Play, Code } from 'lucide-react';
 import { getAllTransitions, getTransition, subscribeToRegistry } from '../../transitions/registry';
-// import { renderFrame } from '../../engines/render/CanvasRenderer';
+import TransitionPreview from '../previews/TransitionPreview';
+import { Asset } from '../../models';
 
 interface TransitionSettingsProps {
     clip: Clip;
     allClips?: Clip[];
     onUpdate: (updates: Partial<Clip>) => void;
     onSeek: (time: number) => void;
+    assets?: Asset[];
 }
 
-export const TransitionSettings: React.FC<TransitionSettingsProps> = ({ clip, allClips = [], onUpdate, onSeek }) => {
+export const TransitionSettings: React.FC<TransitionSettingsProps> = ({ clip, allClips = [], onUpdate, onSeek, assets = [] }) => {
     const focusStart = () => onSeek(clip.start);
     const focusEnd = () => onSeek(clip.start + clip.duration - Math.min(clip.duration, (clip.animationOutDuration || 1)));
 
@@ -33,131 +35,23 @@ export const TransitionSettings: React.FC<TransitionSettingsProps> = ({ clip, al
         );
     };
 
-    // Demo / Preview Logic Hooks (Must be before early return)
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [isPlayingDemo, setIsPlayingDemo] = useState(false);
-    const demoReqRef = useRef<number>();
+    // Demo / Preview Logic - Now using component
+    const [previewType, setPreviewType] = useState<'in' | 'out'>('in');
+    const [sourceAId, setSourceAId] = useState<string>(''); // '' = Default Colors
+    const [sourceBId, setSourceBId] = useState<string>('');
 
-    useEffect(() => {
-        if (!isPlayingDemo) return;
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+    // Determine which transition to show
+    const activeTransitionId = previewType === 'in' ? clip.animationIn : clip.animationOut;
+    const activeTransition = getTransition(activeTransitionId || 'none');
+    const activeParams = previewType === 'in' ? clip.transitionInParams : clip.transitionOutParams;
+    const activeDuration = previewType === 'in' ? (clip.animationInDuration || 1) : (clip.animationOutDuration || 1);
 
-        let startTime = performance.now();
-        const duration = 3000; // 3s loop: 1s In, 1s Hold, 1s Out
+    // Get asset objects for preview
+    const sourceA = assets.find(a => a.id === sourceAId) || sourceAId || undefined;
+    const sourceB = assets.find(a => a.id === sourceBId) || sourceBId || undefined;
 
-        const loop = (time: number) => {
-            const elapsed = (time - startTime) % duration;
-
-            // Clear
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Draw Background (Clip A)
-            ctx.fillStyle = '#333';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#fff';
-            ctx.font = '20px Arial';
-            ctx.fillText("A", 10, 30);
-
-            // Determine Phase
-            // 0-1s: In Transition (B entering)
-            // 1-2s: Hold (B fully visible)
-            // 2-3s: Out Transition (B exiting)
-
-            let progress = 0;
-            let isExit = false;
-            let activeAnim = 'none';
-            let params = {};
-
-            if (elapsed < 1000) {
-                // IN Phase
-                activeAnim = clip.animationIn || 'none';
-                progress = elapsed / 1000;
-                params = clip.transitionInParams || {};
-                isExit = false;
-            } else if (elapsed < 2000) {
-                // HOLD Phase
-                activeAnim = 'none'; // No transition, just show B
-                progress = 1;
-                isExit = false;
-            } else {
-                // OUT Phase
-                activeAnim = clip.animationOut || 'none';
-                progress = (elapsed - 2000) / 1000; // 0 to 1
-                params = clip.transitionOutParams || {};
-                isExit = true;
-            }
-
-            // Draw B (The Clip)
-            ctx.save();
-
-            if (activeAnim !== 'none') {
-                const t = getTransition(activeAnim);
-                if (t) {
-                    const ctxParams = {
-                        ctx,
-                        width: canvas.width,
-                        height: canvas.height,
-                        progress,
-                        isExit,
-                        params
-                    };
-                    const res = t.apply(ctxParams);
-
-                    // Apply transforms
-                    if (res.offsetX) ctx.translate(res.offsetX, 0);
-                    if (res.offsetY) ctx.translate(0, res.offsetY);
-                    if (res.scale) {
-                        ctx.translate(canvas.width / 2, canvas.height / 2);
-                        ctx.scale(res.scale, res.scale);
-                        ctx.translate(-canvas.width / 2, -canvas.height / 2);
-                    }
-                    ctx.globalAlpha = res.opacity ?? 1;
-
-                    // Overlay
-                    if (res.overlayColor) {
-                        // We apply overlay later
-                    }
-
-                    if (res.customDraw) {
-                        ctx.save();
-                        ctx.setTransform(1, 0, 0, 1, 0, 0);
-                        try {
-                            res.customDraw(ctx, canvas.width, canvas.height);
-                        } catch (e) {
-                            console.error("Preview customDraw error:", e);
-                        }
-                        ctx.restore();
-                    }
-                }
-            } else if (elapsed < 2000) {
-                // Hold phase or no transition - fully visible
-                ctx.globalAlpha = 1;
-            } else {
-                // Out phase but no transition - fully visible
-                ctx.globalAlpha = 1;
-            }
-
-            // Draw B Content
-            ctx.fillStyle = '#4f46e5'; // Blue
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#fff';
-            ctx.fillText("B", 10, 30);
-
-            ctx.restore();
-
-            demoReqRef.current = requestAnimationFrame(loop);
-        };
-
-        demoReqRef.current = requestAnimationFrame(loop);
-
-        return () => {
-            if (demoReqRef.current) cancelAnimationFrame(demoReqRef.current);
-        };
-    }, [isPlayingDemo, clip]);
+    // Filter compatible assets (Images/Videos)
+    const mediaAssets = assets.filter(a => a.type === MediaType.IMAGE || a.type === MediaType.VIDEO);
 
     // Simplified UI for ANIMATION clips
     if (clip.type === MediaType.ANIMATION) {
@@ -498,19 +392,46 @@ export const TransitionSettings: React.FC<TransitionSettingsProps> = ({ clip, al
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider flex items-center gap-2">Transitions (In/Out)</label>
-                <button
-                    onClick={() => setIsPlayingDemo(!isPlayingDemo)}
-                    className={`p-1 rounded ${isPlayingDemo ? 'bg-blue-600 text-white' : 'bg-[#27272a] text-gray-400 hover:text-white'}`}
-                    title="Preview Transition"
-                >
-                    <Play size={12} fill={isPlayingDemo ? "currentColor" : "none"} />
-                </button>
             </div>
 
-            {isPlayingDemo && (
-                <div className="w-full h-24 bg-black rounded border border-[#3f3f46] mb-2 overflow-hidden relative">
-                    <canvas ref={canvasRef} width={300} height={150} className="w-full h-full object-contain" />
-                    <div className="absolute bottom-1 right-1 text-[9px] text-gray-500">Preview</div>
+            {activeTransition && activeTransition.id !== 'none' && (
+                <div className="mb-4 bg-[#09090b] p-2 rounded border border-[#3f3f46]">
+                    <div className="flex justify-between items-center mb-2">
+                        <div className="flex gap-1 text-[10px]">
+                            <button onClick={() => setPreviewType('in')} className={`px-2 py-0.5 rounded ${previewType === 'in' ? 'bg-blue-600 text-white' : 'bg-[#27272a] text-gray-400'}`}>In</button>
+                            <button onClick={() => setPreviewType('out')} className={`px-2 py-0.5 rounded ${previewType === 'out' ? 'bg-blue-600 text-white' : 'bg-[#27272a] text-gray-400'}`}>Out</button>
+                        </div>
+                        {/* Source Selectors */}
+                        <div className="flex gap-1">
+                            <select
+                                value={sourceAId}
+                                onChange={e => setSourceAId(e.target.value)}
+                                className="w-16 bg-[#27272a] text-[9px] text-gray-300 rounded border-none"
+                                title="Source A"
+                            >
+                                <option value="">Default A</option>
+                                {mediaAssets.map(a => <option key={a.id} value={a.id}>{a.name.substring(0, 8)}..</option>)}
+                            </select>
+                            <select
+                                value={sourceBId}
+                                onChange={e => setSourceBId(e.target.value)}
+                                className="w-16 bg-[#27272a] text-[9px] text-gray-300 rounded border-none"
+                                title="Source B"
+                            >
+                                <option value="">Default B</option>
+                                {mediaAssets.map(a => <option key={a.id} value={a.id}>{a.name.substring(0, 8)}..</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    <TransitionPreview
+                        transition={activeTransition}
+                        params={activeParams || {}}
+                        duration={activeDuration * 1000}
+                        width={280}
+                        height={158}
+                        sourceA={sourceA}
+                        sourceB={sourceB}
+                    />
                 </div>
             )}
 

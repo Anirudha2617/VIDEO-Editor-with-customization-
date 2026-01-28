@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Track, Clip, MediaType, Effect, AnimationType } from '../types';
+import { Track, Clip, MediaType, Effect, AnimationType } from '../models';
 import {
     Film,
     Image as ImageIcon,

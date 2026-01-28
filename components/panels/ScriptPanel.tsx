@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { Play, RefreshCw, Terminal, FileJson, Sparkles, Key, Loader, Copy, Check } from 'lucide-react';
-import { Clip, Track, Asset } from '../../types';
+import { Clip, Track, Asset } from '../../models';
 import { createExecutionContext } from '../../services/scriptExecutionContext';
 import { generateTimelineState, parseTimelineState } from '../../engines/timeline/StateGenerator';
 import { getApiKey, setApiKey, hasApiKey } from '../../services/apiKeyService';
 import { generateTimelineScript } from '../../services/ai/GeminiProvider';
+import { MediaPipeline } from '../../pipelines/media';
+import { TimelinePipeline } from '../../pipelines/timeline';
+import { ProjectPipeline } from '../../pipelines/project';
 
 interface ScriptPanelProps {
     tracks: Track[];
@@ -18,6 +21,7 @@ interface ScriptPanelProps {
     onAddAsset: (asset: Asset) => void;
     selectedClipIds: string[];
     onSelectClip: (id: string) => void;
+    mediaPipeline: MediaPipeline;
 }
 
 interface ConsoleOutput {
@@ -30,7 +34,7 @@ type TabType = 'ai' | 'console' | 'state';
 
 const ScriptPanel: React.FC<ScriptPanelProps> = ({
     tracks, clips, assets, onApplyScript, onAddClip, onUpdateClip, onRemoveClip, onAddAsset,
-    selectedClipIds, onSelectClip
+    selectedClipIds, onSelectClip, mediaPipeline
 }) => {
     // Tab State
     const [activeTab, setActiveTab] = useState<TabType>('ai');
@@ -211,6 +215,8 @@ declare const clips: any[];
         setIsGenerating(true);
 
         try {
+            // Assuming generateTimelineScript is defined elsewhere and takes assets, clips, tracks
+            // If it needs mediaPipeline, it should be passed here too.
             const code = await generateTimelineScript(aiPrompt, assets, clips, tracks);
             setAiGeneratedCode(code);
             addOutput('info', '✨ AI script generated! Review it in the AI Assistant tab.');
@@ -228,13 +234,12 @@ declare const clips: any[];
 
         try {
             const context = createExecutionContext(
-                assets,
                 clips,
                 tracks,
+                mediaPipeline,
                 onAddClip,
                 onUpdateClip,
                 onRemoveClip,
-                onAddAsset,
                 (content) => {
                     addOutput('result', content);
                 }
@@ -278,13 +283,12 @@ declare const clips: any[];
 
         try {
             const context = createExecutionContext(
-                assets,
                 clips,
                 tracks,
+                mediaPipeline,
                 onAddClip,
                 onUpdateClip,
                 onRemoveClip,
-                onAddAsset,
                 (content) => {
                     addOutput('result', content);
                 }

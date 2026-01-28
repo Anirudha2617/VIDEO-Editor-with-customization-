@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Code, Image as ImageIcon, Video, Type, Save, Trash2, Edit2, Loader2, Download, Sparkles, Plus, ImagePlus, Bot, Maximize2, Minimize2 } from 'lucide-react';
-import { Asset, MediaType, Clip } from '../types';
+import { Asset, MediaType, Clip } from '../models';
 import {
     CodeAsset,
     analyzeCodeType,

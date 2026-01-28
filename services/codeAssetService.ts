@@ -1,5 +1,5 @@
 import { toPng } from 'html-to-image';
-import { Asset, MediaType, Clip } from '../types';
+import { Asset, MediaType, Clip } from '../models';
 
 export interface CodeAsset {
     id: string;
@@ -407,24 +407,64 @@ export function createAssetFromCode(
     code: CodeAsset,
     src: string,
     type: MediaType,
-    subtype?: Asset['subtype']
+    subtype?: any // Loose type for subtype as it's not on all Assets
 ): Asset {
-    return {
+    // Construct the correct Asset subtype
+    const base = {
         id: code.id,
-        type,
-        subtype,
         src,
         name: code.name,
         thumbnail: code.thumbnail,
-        codeSource: {
-            html: code.html,
-            css: code.css,
-            js: code.js,
+    };
+
+    const codeSource = {
+        html: code.html,
+        css: code.css,
+        js: code.js,
+        width: code.width,
+        height: code.height,
+        duration: code.duration,
+        fps: code.fps,
+        isCodeAsset: true as const,
+    };
+
+    if (type === MediaType.VIDEO) {
+        return {
+            ...base,
+            type: MediaType.VIDEO,
+            duration: code.duration || 5,
             width: code.width,
             height: code.height,
+            codeSource,
+            thumbnail: code.thumbnail // explicit for VideoAsset
+        };
+    } else if (type === MediaType.IMAGE) {
+        return {
+            ...base,
+            type: MediaType.IMAGE,
+            width: code.width,
+            height: code.height,
+            codeSource
+        };
+    } else if (type === MediaType.TRANSITION || type === MediaType.EFFECT || type === MediaType.ANIMATION || type === MediaType.SHAPE) {
+        return {
+            ...base,
+            type: type as any,
+            subtype: subtype as any,
+            codeSource,
             duration: code.duration,
-            fps: code.fps,
-            isCodeAsset: true,
-        },
-    };
+            width: code.width,
+            height: code.height
+        };
+    } else {
+        // Fallback for Text or generic
+        return {
+            ...base,
+            type: MediaType.TEXT,
+            codeSource // Technically TextAsset doesn't have codeSource in new model, but we might have coerced it in demo.
+            // For strict compliance, TextAsset shouldn't have codeSource.
+            // But if we want to support "Code Text", we need to genericize it.
+            // Let's return it as casted Asset for now to avoid breaking legacy logic if possible.
+        } as Asset;
+    }
 }

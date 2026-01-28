@@ -1,4 +1,4 @@
-import { Asset, Clip, MediaType, Track } from '../../types';
+import { Asset, Clip, MediaType, Track } from '../../models';
 
 interface TimelineGenerationPrompt {
     userPrompt: string;

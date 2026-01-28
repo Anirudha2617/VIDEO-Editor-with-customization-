@@ -14,7 +14,7 @@ import AIPanel from './components/panels/AIPanel';
 import ShapesPanel from './components/panels/ShapesPanel';
 import TextPanel from './components/panels/TextPanel';
 import ScriptPanel from './components/panels/ScriptPanel';
-import { Asset, Clip, MediaType, Track, ExportSettings, Effect, AnimationType, Project, CustomFont } from './types';
+import { Asset, Clip, MediaType, Track, ExportSettings, Effect, AnimationType, Project, CustomFont } from './models';
 import { Download, Undo2, Redo2, Save, X, Sparkles } from 'lucide-react';
 import { useEditorHistory } from './hooks/useEditorHistory';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -30,6 +30,9 @@ import { useMediaLibrary } from './hooks/useMediaLibrary';
 import { globalCommandManager } from './engines/commands/CommandManager';
 import { useCommandManager } from './engines/commands/hooks';
 import { AddClipCommand, RemoveClipCommand, MoveClipCommand, UpdateClipCommand, CommandContext, GroupClipsCommand, UngroupClipsCommand } from './engines/commands/TimelineCommands';
+import { createTimelinePipeline } from './pipelines/timeline';
+import { createProjectPipeline } from './pipelines/project';
+import { createMediaPipeline } from './pipelines/media';
 
 const INITIAL_TRACKS: Track[] = [
   { id: 't1', type: MediaType.VIDEO, name: 'Video Track 1' },
@@ -39,8 +42,8 @@ const INITIAL_TRACKS: Track[] = [
 ];
 
 const INITIAL_ASSETS: Asset[] = [
-  { id: 'a1', type: MediaType.IMAGE, src: 'https://picsum.photos/800/450?random=1', name: 'Sample Landscape' },
-  { id: 'a2', type: MediaType.IMAGE, src: 'https://picsum.photos/800/450?random=2', name: 'Urban Shot' },
+  { id: 'a1', type: MediaType.IMAGE, src: 'https://picsum.photos/800/450?random=1', name: 'Sample Landscape', width: 800, height: 450 },
+  { id: 'a2', type: MediaType.IMAGE, src: 'https://picsum.photos/800/450?random=2', name: 'Urban Shot', width: 800, height: 450 },
 ];
 
 function App() {
@@ -408,9 +411,21 @@ function App() {
     }
 
     console.log('[App] Creating clip for asset:', asset);
+    const isInfinite = [MediaType.IMAGE, MediaType.TEXT, MediaType.SHAPE].includes(asset.type);
+
+    // safe duration access
+    const assetDuration = 'duration' in asset ? asset.duration : undefined;
+    // safe dimensions access
+    const assetWidth = 'width' in asset ? asset.width : undefined;
+    const assetHeight = 'height' in asset ? asset.height : undefined;
+
     const newClip: Clip = {
-      id: crypto.randomUUID(), assetId: asset.id, trackId, start: time, duration: 5, offset: 0,
+      id: crypto.randomUUID(), assetId: asset.id, trackId, start: time,
+      duration: assetDuration || 5,
+      maxDuration: isInfinite ? undefined : assetDuration,
+      offset: 0,
       name: asset.name, type: asset.type, src: asset.src, scale: 1, opacity: 1, x: 0, y: 0, rotation: 0,
+      width: assetWidth, height: assetHeight, // Copy dimensions
       text: asset.type === MediaType.TEXT ? 'New Text' : undefined,
       fontSize: 60, fontColor: '#ffffff',
       // Shape properties
@@ -599,16 +614,19 @@ function App() {
 
     // 1. Register Scripts
     demo.assets.forEach(a => {
-      if (a.subtype === 'transition' && a.codeSource?.js) {
-        try {
-          const createObj = new Function(a.codeSource.js);
-          registerTransition(createObj());
-        } catch (e) { console.error(e); }
-      } else if (a.subtype === 'filter' && a.codeSource?.js) {
-        try {
-          const createObj = new Function(a.codeSource.js);
-          registerEffect(createObj());
-        } catch (e) { console.error(e); }
+      // Check if it's a GenericAsset with subtype
+      if ('subtype' in a && 'codeSource' in a) {
+        if (a.subtype === 'transition' && a.codeSource?.js) {
+          try {
+            const createObj = new Function(a.codeSource.js);
+            registerTransition(createObj());
+          } catch (e) { console.error(e); }
+        } else if (a.subtype === 'filter' && a.codeSource?.js) {
+          try {
+            const createObj = new Function(a.codeSource.js);
+            registerEffect(createObj());
+          } catch (e) { console.error(e); }
+        }
       }
     });
 
@@ -619,6 +637,24 @@ function App() {
 
     alert("✨ Demo Content Loaded: \n- New 'Demo Track' created\n- Custom Transition 'CircZoom' registered\n- Custom Effect 'Pixelate' registered\n- Cyberpunk assets added");
   };
+
+  // --- Pipeline Instantiation (Phase 8) ---
+  // Re-checking createMediaPipeline signature: (assets, onAdd, onUpdate, onRemove, runtimeCache?).
+  // If I pass [] it won't persist runtime assets across re-renders of App... but App re-renders often.
+  // Actually ScriptExecutionContext managed the runtime cache.
+  // If we move it to App, we need a ref or state.
+  // For now, let's pass a Ref for runtime assets to persist them without re-rendering App? or just use state?
+  // Scripts usually add assets to 'assets' state via ON_ADD. So runtime cache is only for immediate sync access.
+  // Creating a new ref for it.
+  const runtimeAssetsRef = useRef<Asset[]>([]);
+  const unifiedMediaPipeline = createMediaPipeline(assets, (a) => setAssets(prev => [...prev, a]), updateAsset, removeAsset, runtimeAssetsRef.current);
+
+  const timelinePipeline = createTimelinePipeline(globalCommandManager, commandContext, setTracks);
+
+  const projectPipeline = createProjectPipeline(
+    { tracks, clips, assets, duration, canvasWidth: 1920, canvasHeight: 1080 },
+    { setExportStatus, setExportProgress, setIsPlaying, setCurrentTime }
+  );
 
   // Window Manager State
   interface PanelState {
@@ -730,9 +766,23 @@ function App() {
 
   const renderPanelContent = (panel: PanelState) => {
     switch (panel.type) {
-      case 'media': return <MediaPanel assets={assets} onAddAsset={handleAddAsset} onImportFiles={importFiles} onUpdateAsset={handleUpdateAsset} onRemoveAsset={handleRemoveAsset} onDragStart={handleDragStart} />;
-      case 'audio': return <AudioPanel onAddAsset={handleAddAsset} />;
-      case 'text': return <TextPanel assets={assets} onDragStart={handleDragStart} />;
+      case 'media': return (
+        <MediaPanel
+          assets={assets}
+          onAddAsset={handleAddAsset}
+          onImportFiles={importFiles}
+          onUpdateAsset={handleUpdateAsset}
+          onRemoveAsset={handleRemoveAsset}
+          onDragStart={handleDragStart}
+          mediaPipeline={unifiedMediaPipeline}
+        />
+      );
+      case 'audio': return <AudioPanel onAddAsset={handleAddAsset} mediaPipeline={unifiedMediaPipeline} />;
+      case 'text': return <TextPanel onAddText={(text, options) => {
+        const asset: Asset = { id: crypto.randomUUID(), type: MediaType.TEXT, src: '', name: text };
+        (asset as any).textProps = { text, ...options };
+        setAssets(prev => [...prev, asset]);
+      }} />;
       case 'shapes': return <ShapesPanel onDragStart={handleDragStart} />;
       case 'fx': return <FXPanel onDragStart={handleDragStart} />;
       case 'code': return <CodePanel onAddAsset={handleAddAsset} assets={assets} />;
@@ -744,22 +794,24 @@ function App() {
           onCancelExport={cancelExport}
           onReset={() => setExportStatus('idle')} // Pass reset function
           isExporting={exportStatus === 'exporting'}
+          onAddAsset={(asset) => setAssets(prev => [...prev, asset])}
           progress={exportProgress}
           currentTime={currentTime}
           status={exportStatus}
           maxDuration={duration}
         />
       );
-      case 'ai': return <AIPanel onAddAsset={handleAddAsset} />;
+      case 'ai': return <AIPanel onAddAsset={handleAddAsset} mediaPipeline={unifiedMediaPipeline} />;
       case 'script': return (
         <ScriptPanel
+          mediaPipeline={unifiedMediaPipeline}
           tracks={tracks}
           clips={clips}
-          assets={assets}
-          onApplyScript={updateClips}
-          onAddClip={handleAddClip}
-          onUpdateClip={handleClipUpdate}
-          onRemoveClip={handleDeleteClip}
+          assets={assets} // Still needed for initial state perhaps, or pipeline handles it
+          onApplyScript={() => { }} // Legacy prop might be unused now? ScriptPanel internals use pipelines.
+          onAddClip={(clip) => globalCommandManager.execute(new AddClipCommand(commandContext, clip))}
+          onUpdateClip={(id, updates) => globalCommandManager.execute(new UpdateClipCommand(commandContext, id, updates))}
+          onRemoveClip={(id) => globalCommandManager.execute(new RemoveClipCommand(commandContext, id))}
           onAddAsset={handleAddAsset}
           selectedClipIds={selectedClipIds}
           onSelectClip={(id) => setSelectedClipIds([id])}
@@ -1166,7 +1218,10 @@ function App() {
                     <PropertiesPanel
                       clips={selectedClips}
                       allClips={clips}
-                      onUpdate={(u) => handleClipUpdate(selectedClips[0].id, u)}
+                      onUpdate={(u) => {
+                        // Batch update all selected clips for efficiency
+                        setClips(prev => prev.map(c => selectedClipIds.includes(c.id) ? { ...c, ...u } : c));
+                      }}
                       onDelete={handleDeleteClip}
                       onDetachAudio={handleDetachAudio}
                       onClose={() => setSelectedClipIds([])}
@@ -1174,6 +1229,7 @@ function App() {
                       customFonts={customFonts}
                       onUploadFont={handleUploadFont}
                       timerInputRef={timerInputRef}
+                      assets={assets}
                     />
                   </div>
                 </div>

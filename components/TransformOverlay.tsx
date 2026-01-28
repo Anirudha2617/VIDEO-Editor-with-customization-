@@ -1,6 +1,6 @@
 import React from 'react';
 import { Rnd } from 'react-rnd';
-import { Clip } from '../types';
+import { Clip, MediaType } from '../models';
 
 interface TransformOverlayProps {
     activeClip: Clip | null;
@@ -28,13 +28,16 @@ const TransformOverlay: React.FC<TransformOverlayProps> = ({
         return null;
     }
 
+    // Hide for Audio
+    if (activeClip.type === MediaType.AUDIO) return null;
+
     // Calculate scaling factors
     const displayScaleFactor = containerWidth / 1280; // Renderer uses base width 1280
 
     // Calculate Box Dimensions
-    // Default to 1280x720 if not specified (matches renderer default somewhat)
-    const baseW = activeClip.width || 1280;
-    const baseH = activeClip.height || 720;
+    // Default to 1280x720 only if NO dimensions exist (shouldn't happen for visual media now)
+    const baseW = activeClip.width ?? 1280;
+    const baseH = activeClip.height ?? 720;
     const currentScale = activeClip.scale || 1;
 
     const width = baseW * currentScale * displayScaleFactor;

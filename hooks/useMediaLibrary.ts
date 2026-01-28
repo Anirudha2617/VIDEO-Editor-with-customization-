@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Asset } from '../models/Asset'; // Use new Model
+import { Asset, MediaType } from '../models/Asset'; // Use new Model
 import { MediaLibraryEngine } from '../engines/media/MediaLibraryEngine'; // Use new Engine
 
 interface UseMediaLibraryReturn {
@@ -37,19 +37,47 @@ export const useMediaLibrary = (
         const newAssets: Asset[] = [];
 
         try {
+            // Track names to handle duplicates within the same batch upload
+            const currentNames = assets.map(a => a.name);
+
             for (const file of files) {
                 // Use Engine for logic
                 const type = MediaLibraryEngine.detectMediaType(file);
                 const src = MediaLibraryEngine.createBlobUrl(file);
                 const metadata = await MediaLibraryEngine.getMediaMetadata(file, type);
 
-                const asset: Asset = {
+                const uniqueName = MediaLibraryEngine.getUniqueName(file.name, currentNames);
+                currentNames.push(uniqueName); // Add to local list for next iteration checks
+
+                let asset: Asset;
+                const common = {
                     id: crypto.randomUUID(),
-                    type,
                     src,
-                    name: file.name,
-                    // We can eventually store width/height in Asset interface
+                    name: uniqueName
                 };
+
+                if (type === MediaType.VIDEO) {
+                    asset = {
+                        ...common,
+                        type: MediaType.VIDEO,
+                        duration: metadata.duration || 0,
+                        width: metadata.width || 0,
+                        height: metadata.height || 0
+                    };
+                } else if (type === MediaType.AUDIO) {
+                    asset = {
+                        ...common,
+                        type: MediaType.AUDIO,
+                        duration: metadata.duration || 0
+                    };
+                } else {
+                    asset = {
+                        ...common,
+                        type: MediaType.IMAGE,
+                        width: metadata.width || 0,
+                        height: metadata.height || 0
+                    };
+                }
 
                 newAssets.push(asset);
             }

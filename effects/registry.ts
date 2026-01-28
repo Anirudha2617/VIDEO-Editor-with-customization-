@@ -1,4 +1,4 @@
-import { EffectDefinition } from './types.ts';
+import { EffectDefinition } from '../models/Effect';
 import { blurEffect } from './library/blur.ts';
 import { colorEffect } from './library/color.ts';
 import { customEffect } from './library/custom.ts';

@@ -1,4 +1,4 @@
-import { Transition, TransitionContext, TransitionResult } from '../types';
+import { Transition, TransitionContext, TransitionResult } from '../../models';
 
 export const wipeTransition: Transition = {
     id: 'wipe',

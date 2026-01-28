@@ -13,6 +13,7 @@ export interface Clip {
     start: number; // Start time on the timeline (seconds)
     duration: number; // Duration of the clip (seconds)
     offset: number; // Start time within the source asset (seconds)
+    maxDuration?: number; // Maximum allowed duration (source duration)
     name: string;
     type: MediaType;
     src: string;

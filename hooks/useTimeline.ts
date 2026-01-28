@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Clip, Track } from '../types';
+import { Clip, Track } from '../models';
 import { TimelineEngine } from '../engines/timeline/TimelineEngine';
 
 interface UseTimelineProps {
@@ -152,12 +152,30 @@ export const useTimeline = ({
                 const snap = TimelineEngine.SNAP_INTERVAL;
 
                 const baseOriginal = originals.get(baseClip.id)!;
-                const newBaseDuration = Math.max(
+                let newBaseDuration = Math.max(
                     0.05,
                     Math.round((baseOriginal.duration + deltaTime) / snap) * snap
                 );
 
-                const scale = newBaseDuration / baseOriginal.duration;
+                // Calculate proposed scale
+                let scale = newBaseDuration / baseOriginal.duration;
+
+                // Restrict scale if any target clip hits its maxDuration
+                targets.forEach(c => {
+                    if (c.maxDuration) {
+                        const orig = originals.get(c.id)!;
+                        // Time based limit: newDuration <= maxDuration
+                        // orig.duration * scale <= maxDuration
+                        // scale <= maxDuration / orig.duration
+                        const maxScale = c.maxDuration / orig.duration;
+                        if (scale > maxScale) {
+                            scale = maxScale;
+                        }
+                    }
+                });
+
+                // Recalculate newBaseDuration based on clamped scale
+                newBaseDuration = baseOriginal.duration * scale;
 
                 targets.forEach(c => {
                     const orig = originals.get(c.id)!;

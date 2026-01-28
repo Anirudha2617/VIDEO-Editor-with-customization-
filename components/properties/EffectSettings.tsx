@@ -1,9 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { Clip, Effect, MediaType } from '../../types';
+import { Clip, Effect, MediaType, EffectDefinition } from '../../models';
 import { Wand2, X, Plus, Play, Code } from 'lucide-react';
 import { getAllEffects, getEffect } from '../../effects/registry';
-import { EffectDefinition } from '../../effects/types';
 
 interface EffectSettingsProps {
     clip: Clip;
@@ -188,7 +186,7 @@ export const EffectSettings: React.FC<EffectSettingsProps> = ({ clip, onUpdate }
                 <div className="flex items-center gap-1">
                     <button
                         onClick={() => setIsPlayingDemo(!isPlayingDemo)}
-                        className={`p-1 rounded ${isPlayingDemo ? 'bg-blue-600 text-white' : 'bg-[#27272a] text-gray-400 hover:text-white'}`}
+                        className={`p - 1 rounded ${isPlayingDemo ? 'bg-blue-600 text-white' : 'bg-[#27272a] text-gray-400 hover:text-white'} `}
                         title="Preview Effects"
                     >
                         <Play size={12} fill={isPlayingDemo ? "currentColor" : "none"} />

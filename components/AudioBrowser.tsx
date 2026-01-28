@@ -1,13 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { Search, Play, Pause, Download, Loader2, Music, Volume2 } from 'lucide-react';
 import { searchAudio, AudioResult, AUDIO_CATEGORIES, AUDIO_SUGGESTIONS } from '../services/audioLibraryService';
-import { Asset, MediaType } from '../types';
+import { Asset, MediaType } from '../models';
+
+import { MediaPipeline } from '../pipelines/media';
 
 interface AudioBrowserProps {
-    onAddAudio: (asset: Asset) => void;
+    mediaPipeline: MediaPipeline;
+    onAddAudio?: (asset: Asset) => void; // Optional legacy
 }
 
-const AudioBrowser: React.FC<AudioBrowserProps> = ({ onAddAudio }) => {
+const AudioBrowser: React.FC<AudioBrowserProps> = ({ mediaPipeline, onAddAudio }) => {
     const [query, setQuery] = useState('');
     const [category, setCategory] = useState('all');
     const [results, setResults] = useState<AudioResult[]>([]);
@@ -64,21 +67,14 @@ const AudioBrowser: React.FC<AudioBrowserProps> = ({ onAddAudio }) => {
         setDownloadingId(audio.id);
 
         try {
-            // For Pixabay, we'll use the preview URL as the download source
-            // In production, you'd want to use the actual download URL with proper licensing
-            const response = await fetch(audio.previewUrl);
-            const blob = await response.blob();
-
-            // Create asset
-            const audioUrl = URL.createObjectURL(blob);
-            const newAsset: Asset = {
-                id: `audio_${Date.now()}_${audio.id}`,
-                type: MediaType.AUDIO,
-                src: audioUrl,
-                name: audio.title || 'Downloaded Audio'
-            };
-
-            onAddAudio(newAsset);
+            if (mediaPipeline) {
+                await mediaPipeline.addFromUrl(audio.previewUrl, audio.title || 'Downloaded Audio');
+            } else {
+                // Fallback (or Error)
+                // For now, let's just assume pipeline exists or keep legacy if we kept the prop?
+                // But I'm removing the prop in interface below, so I should rely on pipeline.
+                console.error("MediaPipeline not provided");
+            }
 
             // Show success feedback
             alert(`"${audio.title}" added to your media library!`);

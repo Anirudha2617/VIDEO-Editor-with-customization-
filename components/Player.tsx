@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Clip, MediaType, Asset, ExportSettings } from '../types';
+import { Clip, MediaType, Asset, ExportSettings } from '../models';
 import { Play, Pause, SkipBack, SkipForward, Maximize, Minimize } from 'lucide-react';
 import { renderCanvas } from '../engines/render/CanvasRenderer';
 import TransformOverlay from './TransformOverlay';
@@ -426,12 +426,76 @@ const Player: React.FC<PlayerProps> = ({
 
   // Audio/Video Playback Synchronization
   useEffect(() => {
-    mediaCache.current.forEach((media) => {
-      if (media instanceof HTMLVideoElement || media instanceof HTMLAudioElement) {
-        media.muted = exportStatus === 'exporting';
+    // If we are exporting, we mute everything in the preview as the recorder handles the stream
+    if (exportStatus === 'exporting') {
+      mediaCache.current.forEach((media) => {
+        if (media instanceof HTMLVideoElement || media instanceof HTMLAudioElement) {
+          media.muted = true;
+        }
+      });
+      return;
+    }
+
+    // Main Playback Loop
+    clips.forEach(clip => {
+      const media = mediaCache.current.get(clip.assetId);
+      if (!media || !(media instanceof HTMLVideoElement || media instanceof HTMLAudioElement)) return;
+
+      // Check if clip is currently active
+      const isActive = currentTime >= clip.start && currentTime < clip.start + clip.duration;
+
+      if (isActive) {
+        // Calculate where we should be in the media file
+        // Current global time - Clip Start Time + Clip Offset (start point in source)
+        const expectedMediaTime = currentTime - clip.start + clip.offset;
+
+        // Sync Time (if drift is too large, > 0.1s)
+        if (Math.abs(media.currentTime - expectedMediaTime) > 0.1) {
+          media.currentTime = expectedMediaTime;
+        }
+
+        // Play/Pause State
+        if (isPlaying) {
+          if (media.paused) {
+            const playPromise = media.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(error => {
+                // Auto-play was prevented
+                // console.warn("Auto-play prevented for", clip.name, error);
+              });
+            }
+          }
+        } else {
+          if (!media.paused) {
+            media.pause();
+          }
+        }
+
+        // Volume & Mute
+        const volume = clip.audioData?.volume ?? 1;
+        const isMuted = clip.audioData?.muted ?? false;
+
+        media.volume = Math.min(1, Math.max(0, volume)); // Clamp 0-1
+        media.muted = isMuted;
+
+      } else {
+        // Not active: Pause and reset if needed (optional optimization)
+        if (!media.paused) {
+          media.pause();
+        }
       }
     });
-  }, [exportStatus]);
+
+    // Cleanup on unmount or pause: pause all
+    if (!isPlaying) {
+      mediaCache.current.forEach((media) => {
+        if ((media instanceof HTMLVideoElement || media instanceof HTMLAudioElement) && !media.paused) {
+          media.pause();
+        }
+      });
+    }
+
+  }, [currentTime, isPlaying, clips, exportStatus]); // Dependency on currentTime ensures this runs every frame/tick
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;

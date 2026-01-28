@@ -1,5 +1,5 @@
 import { Command } from './types';
-import { Clip, Track } from '../../types';
+import { Clip, Track } from '../../models';
 
 export interface CommandContext {
     getClips: () => Clip[];

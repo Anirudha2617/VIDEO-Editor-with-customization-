@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AnimationType, EasingType, Effect } from '../../types';
-import { EffectDefinition } from '../../effects/types';
+import type { AnimationType, EasingType, Effect, EffectDefinition, Transition } from '../../models';
+import { getEffect, getAllEffects, subscribeToRegistry as subscribeToEffects } from '../../effects/registry';
+import { getTransition, getAllTransitions, subscribeToRegistry } from '../../transitions/registry';
 import { Wand2, Move, Sparkles } from 'lucide-react';
-import { getAllTransitions, subscribeToRegistry } from '../../transitions/registry';
-import { getAllEffects, subscribeToRegistry as subscribeToEffects } from '../../effects/registry';
 
 interface FXPanelProps {
     onDragStart: (e: React.DragEvent, item: any, type: string) => void;

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Search, Upload, Type, Check } from 'lucide-react';
-import { CustomFont } from '../types';
+import { CustomFont } from '../models';
 
 // Curated list of popular Google Fonts
 const GOOGLE_FONTS = [
