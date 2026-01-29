@@ -113,13 +113,27 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
         setContextMenu(null);
     };
 
-    const handleSaveEditedImage = (newSrc: string) => {
+    const handleSaveEditedImage = async (newSrc: string) => {
         if (editingAsset) {
+            // Calculate new dimensions
+            const getDimensions = (): Promise<{ width: number, height: number }> => {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+                    img.onerror = () => resolve({ width: 0, height: 0 }); // Fallback
+                    img.src = newSrc;
+                });
+            };
+
+            const { width, height } = await getDimensions();
+
             const newAsset: Asset = {
                 ...editingAsset,
                 id: crypto.randomUUID(),
                 name: `Edited - ${editingAsset.name}`,
-                src: newSrc
+                src: newSrc,
+                // Ensure we update dimensions for the new blob
+                ...((width > 0 && height > 0) ? { width, height } : {})
             };
             onAddAsset(newAsset);
             setEditingAsset(null);

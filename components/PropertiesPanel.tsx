@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Clip, Effect, EffectDefinition, MediaType, CustomFont, Asset } from '../models';
-import { X, Trash2, Layers, Settings2, Film, Image as ImageIcon, Move, Wand2, Bold, Italic, Underline, Superscript, Subscript } from 'lucide-react';
+import { X, Trash2, Layers, Settings2, Film, Image as ImageIcon, Move, Wand2, Bold, Italic, Underline, Superscript, Subscript, Group, Ungroup } from 'lucide-react';
 import { TransitionSettings } from './properties/TransitionSettings';
 import { EffectSettings } from './properties/EffectSettings';
 import AudioSettings from './properties/AudioSettings';
@@ -20,9 +20,11 @@ interface PropertiesPanelProps {
   onUploadFont?: (font: CustomFont) => void;
   timerInputRef?: React.RefObject<HTMLInputElement>;
   assets?: Asset[];
+  onGroup?: () => void;
+  onUngroup?: () => void;
 }
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ clips, allClips = [], onUpdate, onDelete, onClose, onSeek, onDetachAudio, customFonts = [], onUploadFont = () => { }, timerInputRef, assets = [] }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ clips, allClips = [], onUpdate, onDelete, onClose, onSeek, onDetachAudio, customFonts = [], onUploadFont = () => { }, timerInputRef, assets = [], onGroup, onUngroup }) => {
   if (clips.length === 0) return null;
 
   if (clips.length > 1) {
@@ -81,6 +83,14 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ clips, allClips = [],
           </div>
 
           <div className="pt-4 mt-4 border-t border-[var(--border-base)] space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={onGroup} className="flex items-center justify-center gap-2 bg-[#27272a] hover:bg-[#3f3f46] text-gray-200 py-2 rounded text-xs font-semibold transition border border-[#3f3f46]">
+                <Group size={14} /> Group
+              </button>
+              <button onClick={onUngroup} className="flex items-center justify-center gap-2 bg-[#27272a] hover:bg-[#3f3f46] text-gray-200 py-2 rounded text-xs font-semibold transition border border-[#3f3f46]">
+                <Ungroup size={14} /> Ungroup
+              </button>
+            </div>
             <button onClick={onDelete} className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-3 rounded text-xs font-bold transition"><Trash2 size={14} /> Delete Selected</button>
           </div>
         </div>

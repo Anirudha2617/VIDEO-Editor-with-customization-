@@ -3,6 +3,7 @@ import { registerTransition } from '../transitions/registry';
 import { MediaPipeline } from '../pipelines/media';
 import { TimelinePipeline } from '../pipelines/timeline';
 import { ProjectPipeline } from '../pipelines/project';
+import { LibraryPipeline } from '../pipelines/library';
 
 
 export interface ClipConfig {
@@ -25,10 +26,11 @@ export interface TransitionConfig {
 
 export interface ScriptExecutionContext {
     // Asset references (auto-injected)
-    assets: Record<string, string>;
+    assets: Record<string, Asset>;
 
     // Timeline operations
     addClip: (assetIdOrName: string, config: ClipConfig) => { id: string };
+    addRawClip: (clip: Clip) => { id: string };
     removeClip: (id: string) => void;
     updateClip: (id: string, updates: Partial<Clip>) => void;
     getClip: (id: string) => Clip | undefined;
@@ -58,8 +60,14 @@ export interface ScriptExecutionContext {
         generateImage: (prompt: string) => Promise<Asset>;
     };
 
+    // Selected Clips
+    selectedClipIds: string[];
+
+    // Unified Library Access
+    libraryPipeline: LibraryPipeline;
+
     // Custom transition registration
-    registerTransition: (config: TransitionConfig) => void;
+    registerTransition: (config: TransitionConfig | Transition) => void;
 
     // Utility
     display: (content: any) => void;
@@ -72,24 +80,42 @@ export const createExecutionContext = (
     onAddClip: (clip: Clip) => void,
     onUpdateClip: (id: string, updates: Partial<Clip>) => void,
     onRemoveClip: (id: string) => void,
-    onDisplay: (content: any) => void
+
+    onDisplay: (content: any) => void,
+    libraryPipeline: LibraryPipeline, // New dependency
+    selectedClipIds: string[] = []
 ): ScriptExecutionContext => {
 
+    // Runtime cache for clips created DURING this script execution
+    const runtimeClips: Clip[] = [];
+
+    const findClip = (id: string): Clip | undefined => {
+        return clips.find(c => c.id === id) || runtimeClips.find(c => c.id === id);
+    };
+
     // Create asset name map
-    const assetMap: Record<string, string> = {};
+    const assetMap: Record<string, Asset> = {}; // Changed to Asset object for better utility
     mediaPipeline.getAll().forEach(asset => {
-        const safeName = asset.name.replace(/[^a-zA-Z0-9]/g, '_');
-        assetMap[safeName] = asset.id;
+        const safeName = asset.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        assetMap[safeName] = asset;
+        assetMap[asset.id] = asset; // Also map ID
     });
 
     const context: ScriptExecutionContext = {
         assets: assetMap,
+        selectedClipIds,
+        libraryPipeline,
 
         addClip: (assetIdOrName: string, config: ClipConfig) => {
-            // Use Media Pipeline to find asset
-            let asset = mediaPipeline.getById(assetIdOrName) || mediaPipeline.getByName(assetIdOrName);
+            // Find asset using our enhanced map or fallback to pipeline
+            let asset = assetMap[assetIdOrName.toLowerCase()] || assetMap[assetIdOrName];
 
-            // Handle Virtual Assets (Animation/Shape/Effect) if still not found
+            if (!asset) {
+                // Try finding by raw ID or name in pipeline if map failed
+                asset = mediaPipeline.getById(assetIdOrName) || mediaPipeline.getByName(assetIdOrName);
+            }
+
+            // Handle Virtual Assets (Animation/Shape/Effect)
             if (!asset) {
                 if (assetIdOrName.startsWith('anim_')) {
                     const animType = assetIdOrName.replace('anim_', '');
@@ -99,7 +125,7 @@ export const createExecutionContext = (
                         type: MediaType.ANIMATION,
                         src: '',
                         subtype: 'animation'
-                    };
+                    } as Asset;
                 } else if (assetIdOrName.startsWith('shape_')) {
                     const shapeType = assetIdOrName.replace('shape_', '');
                     asset = {
@@ -108,7 +134,7 @@ export const createExecutionContext = (
                         type: MediaType.SHAPE,
                         src: '',
                         subtype: 'animation'
-                    };
+                    } as Asset;
                 } else if (assetIdOrName.startsWith('fx_')) {
                     const effectType = assetIdOrName.replace('fx_', '');
                     asset = {
@@ -117,18 +143,15 @@ export const createExecutionContext = (
                         type: MediaType.EFFECT,
                         src: '',
                         subtype: 'filter'
-                    };
+                    } as Asset;
                 }
             }
 
             if (!asset) {
-                throw new Error(`Asset not found: ${assetIdOrName} `);
+                throw new Error(`Asset not found: ${assetIdOrName}`);
             }
 
-            const trackId = tracks[config.track - 1]?.id || tracks[0]?.id;
-            if (!trackId) {
-                throw new Error(`Track ${config.track} not found`);
-            }
+            const trackId = config.track ? (typeof config.track === 'string' ? config.track : `t${config.track}`) : 't1';
 
             const newClip: Clip = {
                 id: crypto.randomUUID(),
@@ -173,124 +196,117 @@ export const createExecutionContext = (
                 newClip.padding = textProps.padding;
             }
 
+            runtimeClips.push(newClip); // Add to local cache
             onAddClip(newClip);
             return { id: newClip.id };
         },
-
         removeClip: (id: string) => {
             onRemoveClip(id);
+            const idx = runtimeClips.findIndex(c => c.id === id);
+            if (idx !== -1) runtimeClips.splice(idx, 1);
         },
-
         updateClip: (id: string, updates: Partial<Clip>) => {
             onUpdateClip(id, updates);
-        },
-
-        getClip: (id: string) => {
-            return clips.find(c => c.id === id);
-        },
-
-        addEffect: (clipId: string, effect: Partial<Effect>) => {
-            const clip = clips.find(c => c.id === clipId);
-            if (!clip) {
-                throw new Error(`Clip not found: ${clipId} `);
+            // Update local cache if exists
+            const localClip = runtimeClips.find(c => c.id === id);
+            if (localClip) {
+                Object.assign(localClip, updates);
             }
-
-            const newEffect: Effect = {
-                id: crypto.randomUUID(),
-                name: effect.name || 'effect',
-                type: 'filter',
-                value: effect.value || '',
-                ...effect
-            };
-
-            onUpdateClip(clipId, {
-                effects: [...(clip.effects || []), newEffect]
-            });
         },
+        getClip: (id: string) => findClip(id),
 
-        addTextAsset: (text: string, options = {}) => {
-            return mediaPipeline.addText(text, options);
-        },
+        addTextAsset: (text, options) => mediaPipeline.addText(text, options),
 
-        addTransition: (clipId: string, type: 'in' | 'out', transition: AnimationType, duration = 1) => {
-            const clip = clips.find(c => c.id === clipId);
-            if (!clip) {
-                throw new Error(`Clip not found: ${clipId} `);
+        addEffect: (clipId, effect) => {
+            const clip = findClip(clipId);
+            if (clip) {
+                const newEffect = {
+                    id: crypto.randomUUID(),
+                    name: 'Effect', // Prevent crash in renderer
+                    kind: 'custom',
+                    ...effect
+                } as Effect;
+                const newEffects = [...(clip.effects || []), newEffect];
+
+                onUpdateClip(clipId, { effects: newEffects });
+
+                // Update local cache
+                if (runtimeClips.includes(clip)) {
+                    clip.effects = newEffects;
+                }
             }
+        },
 
-            const updates: Partial<Clip> = {};
-            if (type === 'in') {
-                updates.animationIn = transition;
-                updates.animationInDuration = duration;
-                updates.animationInEasing = 'ease-in-out';
-            } else {
-                updates.animationOut = transition;
-                updates.animationOutDuration = duration;
-                updates.animationOutEasing = 'ease-in-out';
+        addTransition: (clipId, type, transition, duration) => {
+            const clip = findClip(clipId);
+            if (clip) {
+                const updates: Partial<Clip> = {};
+                if (type === 'in') {
+                    updates.animationIn = transition;
+                    if (duration) updates.animationDuration = duration;
+                } else {
+                    updates.animationOut = transition;
+                    // Note: Clip model might need animationOutDuration if different,
+                    // but usually animationDuration is shared or specific to 'in'.
+                    // For now assuming shared or 'animationDuration' applies.
+                }
+                onUpdateClip(clipId, updates);
+
+                // Update local cache
+                if (runtimeClips.includes(clip)) {
+                    Object.assign(clip, updates);
+                }
+
+                onDisplay(`Added ${type}-transition '${transition}' to ${clip.name}`);
             }
-
-            onUpdateClip(clipId, updates);
         },
 
-        addAssetFromUrl: async (url: string, name?: string) => {
-            return mediaPipeline.addFromUrl(url, name);
+        addRawClip: (clip: Clip) => {
+            runtimeClips.push(clip);
+            onAddClip(clip);
+            return { id: clip.id };
         },
+
+        addAssetFromUrl: (url, name) => mediaPipeline.addFromUrl(url, name),
 
         ai: {
-            generateImage: async (prompt: string) => {
-                return mediaPipeline.ai.generateImage(prompt);
-            }
+            generateImage: (prompt) => mediaPipeline.ai.generateImage(prompt)
         },
 
-        registerTransition: (config: TransitionConfig) => {
-            if (!config.id || !config.name) {
-                throw new Error('Transition must have id and name');
-            }
+        registerTransition: (config: TransitionConfig | Transition) => {
+            let transition: Transition;
 
-            const transition: Transition = {
-                id: config.id,
-                name: config.name,
-                description: config.description || `Rotates from ${config.fromDegree}° to ${config.toDegree}°`,
-                variables: [
-                    {
-                        name: 'From Degree',
-                        key: 'fromDegree',
-                        type: 'number',
-                        defaultValue: config.fromDegree,
-                        min: 0,
-                        max: 360
-                    },
-                    {
-                        name: 'To Degree',
-                        key: 'toDegree',
-                        type: 'number',
-                        defaultValue: config.toDegree,
-                        min: 0,
-                        max: 360
-                    }
-                ],
-                apply: (context: TransitionContext): TransitionResult => {
-                    const { progress, isExit, params } = context;
-                    const fromDeg = params.fromDegree ?? config.fromDegree;
-                    const toDeg = params.toDegree ?? config.toDegree;
-
-                    let rotation: number;
-                    if (isExit) {
-                        // Exit: animate from toDegree back to fromDegree
-                        rotation = toDeg + (fromDeg - toDeg) * progress;
-                    } else {
-                        // Enter: animate from fromDegree to toDegree
-                        rotation = fromDeg + (toDeg - fromDeg) * progress;
-                    }
-
-                    return { rotation };
+            // Check if it's a full Transition object (has apply function)
+            if ('apply' in config && typeof config.apply === 'function') {
+                transition = config as Transition;
+            } else {
+                // Legacy Config Pattern (Rotation only)
+                const c = config as TransitionConfig;
+                if (!c.id || !c.name) {
+                    throw new Error('Transition must have id and name');
                 }
-            };
+                transition = {
+                    id: c.id,
+                    name: c.name,
+                    description: c.description || `Rotates from ${c.fromDegree}° to ${c.toDegree}°`,
+                    variables: [
+                        { name: 'From Degree', key: 'fromDegree', type: 'number', defaultValue: c.fromDegree, min: 0, max: 360 },
+                        { name: 'To Degree', key: 'toDegree', type: 'number', defaultValue: c.toDegree, min: 0, max: 360 }
+                    ],
+                    apply: (context: TransitionContext): TransitionResult => {
+                        const { progress, isExit, params } = context;
+                        const fromDeg = params.fromDegree ?? c.fromDegree;
+                        const toDeg = params.toDegree ?? c.toDegree;
+                        return {
+                            rotation: isExit ? toDeg + (fromDeg - toDeg) * progress : fromDeg + (toDeg - fromDeg) * progress
+                        };
+                    }
+                };
+            }
 
             registerTransition(transition);
-            onDisplay(`✓ Registered transition: ${config.name} `);
+            onDisplay(`✓ Registered transition: ${transition.name} `);
         },
-
         display: (content: any) => {
             onDisplay(content);
         }

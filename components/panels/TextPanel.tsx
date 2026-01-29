@@ -1,17 +1,18 @@
 import React from 'react';
 import { Asset, MediaType } from '../../models';
 import { Type } from 'lucide-react';
+import { LibraryPipeline } from '../../pipelines/library';
 
 interface TextPanelProps {
     assets: Asset[];
     onDragStart: (e: React.DragEvent, item: any, type: string) => void;
+    onAddText: (text: string, options?: any) => void;
+    libraryPipeline?: LibraryPipeline;
 }
 
-const TextPanel: React.FC<TextPanelProps> = ({ assets, onDragStart }) => {
-    const textPresets: Asset[] = [
+const TextPanel: React.FC<TextPanelProps> = ({ assets, onDragStart, libraryPipeline }) => {
+    const textPresets = libraryPipeline ? libraryPipeline.getItems('text') : [
         { id: 'txt_1', type: MediaType.TEXT, src: '', name: 'Basic Title' },
-        { id: 'txt_2', type: MediaType.TEXT, src: '', name: 'Subtitle' },
-        { id: 'txt_3', type: MediaType.TEXT, src: '', name: 'Credits' },
     ];
 
     return (

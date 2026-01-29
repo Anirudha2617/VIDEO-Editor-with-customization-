@@ -21,7 +21,25 @@ const TransformOverlay: React.FC<TransformOverlayProps> = ({
     canvasHeight,
     currentTime,
 }) => {
-    if (!activeClip) return null;
+    // State for Shift Key
+    const [isShiftPressed, setIsShiftPressed] = React.useState(false);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Shift') setIsShiftPressed(true);
+        };
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (e.key === 'Shift') setIsShiftPressed(false);
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, []);
 
     // Only show overlay if the clip is currently visible on the canvas at the current time
     if (currentTime < activeClip.start || currentTime > activeClip.start + activeClip.duration) {
@@ -60,16 +78,6 @@ const TransformOverlay: React.FC<TransformOverlayProps> = ({
                 position={{ x, y }}
                 onDragStop={(e, d) => {
                     // Update X/Y based on drag delta
-                    // d.x, d.y are change in pixels
-                    // newX_clip = oldX_clip + (d.x / displayScaleFactor)
-                    // But Rnd returns absolute X/Y in onDragStop usually? 
-                    // Wait, react-rnd onDragStop provides (e, d). d properties: x, y (node x/y), deltaX, deltaY.
-                    // Actually usually we use onDrag to track, but onDragStop works if we calculate from new position.
-
-                    // Let's use the new position to calculate back to clip.x
-                    // newBoxCornerX = d.x (absolute pos provided by lib if position prop is managed?)
-                    // Rnd is controlled, so 'd' contains { x, y } which is the new position.
-
                     const newBoxCenterX = d.x + (width / 2);
                     const newBoxCenterY = d.y + (height / 2);
 
@@ -85,11 +93,6 @@ const TransformOverlay: React.FC<TransformOverlayProps> = ({
                     const newBoxW = parseFloat(ref.style.width);
                     const newBoxH = parseFloat(ref.style.height);
 
-                    // Calculate new scale
-                    // newWidth = baseW * newScale * displayScaleFactor
-                    // newScale = newWidth / (baseW * displayScaleFactor)
-                    const newScale = newBoxW / (baseW * displayScaleFactor);
-
                     // Update position as well (resize might shift center)
                     const newBoxCenterX = position.x + (newBoxW / 2);
                     const newBoxCenterY = position.y + (newBoxH / 2);
@@ -97,13 +100,32 @@ const TransformOverlay: React.FC<TransformOverlayProps> = ({
                     const newClipX = (newBoxCenterX - (containerWidth / 2)) / displayScaleFactor;
                     const newClipY = (newBoxCenterY - (containerHeight / 2)) / displayScaleFactor;
 
-                    onChange({
-                        scale: newScale,
-                        x: newClipX,
-                        y: newClipY
-                    });
+                    if (isShiftPressed) {
+                        // Unlocked: Update Width & Height (Non-uniform)
+                        // Preserve current "scale" value, update base dimensions
+                        const s = activeClip.scale || 1;
+                        const newW = newBoxW / (displayScaleFactor * s);
+                        const newH = newBoxH / (displayScaleFactor * s);
+
+                        onChange({
+                            width: newW,
+                            height: newH,
+                            x: newClipX,
+                            y: newClipY
+                        });
+                    } else {
+                        // Locked: Update Scale (Uniform)
+                        // newWidth = baseW * newScale * displayScaleFactor
+                        const newScale = newBoxW / (baseW * displayScaleFactor);
+
+                        onChange({
+                            scale: newScale,
+                            x: newClipX,
+                            y: newClipY
+                        });
+                    }
                 }}
-                lockAspectRatio={true}
+                lockAspectRatio={!isShiftPressed}
                 className="pointer-events-auto border-2 border-blue-500 z-50 shadow-[0_0_0_1px_rgba(255,255,255,0.5)]"
                 handleStyles={{
                     topLeft: { width: 10, height: 10, background: 'white', borderRadius: '50%', border: '2px solid #3b82f6', left: -6, top: -6 },

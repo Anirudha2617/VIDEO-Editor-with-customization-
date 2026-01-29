@@ -219,7 +219,7 @@ const renderClip = (
 
   if (clip.effects) {
     clip.effects.forEach(e => {
-      const effectDef = getEffect(e.kind || e.name.toLowerCase());
+      const effectDef = getEffect(e.kind || e.name?.toLowerCase());
       if (effectDef) {
         const ctxParams: EffectContext = {
           ctx,

@@ -1,16 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Move, Wand2, Sparkles } from 'lucide-react';
 import type { AnimationType, EasingType, Effect, EffectDefinition, Transition } from '../../models';
 import { getEffect, getAllEffects, subscribeToRegistry as subscribeToEffects } from '../../effects/registry';
 import { getTransition, getAllTransitions, subscribeToRegistry } from '../../transitions/registry';
-import { Wand2, Move, Sparkles } from 'lucide-react';
+import { LibraryPipeline } from '../../pipelines/library';
 
 interface FXPanelProps {
     onDragStart: (e: React.DragEvent, item: any, type: string) => void;
+    libraryPipeline?: LibraryPipeline;
 }
 
-const FXPanel: React.FC<FXPanelProps> = ({ onDragStart }) => {
+const FXPanel: React.FC<FXPanelProps> = ({ onDragStart, libraryPipeline }) => {
     // Get transitions from registry
     const [animationPresets, setAnimationPresets] = useState(() => {
+        if (libraryPipeline) {
+            return libraryPipeline.getItems('transition').map(t => ({
+                type: t.id as AnimationType,
+                name: t.name,
+                icon: <Move size={16} />,
+                duration: t.data?.duration || 1,
+                easing: t.data?.easing || 'ease-out'
+            }));
+        }
         return getAllTransitions().map(t => ({
             type: t.id as AnimationType,
             name: t.name,
@@ -34,13 +45,35 @@ const FXPanel: React.FC<FXPanelProps> = ({ onDragStart }) => {
     }, []);
 
     // Registry Effects
-    const [registryEffects, setRegistryEffects] = useState<EffectDefinition[]>(getAllEffects());
+    const [registryEffects, setRegistryEffects] = useState<EffectDefinition[]>([]);
     useEffect(() => {
-        const unsubscribe = subscribeToEffects(() => {
+        if (libraryPipeline) {
+            const effects = libraryPipeline.getItems('effect').map(e => ({
+                id: e.id,
+                name: e.name,
+                description: e.description,
+                // types need to match, EffectDefinition might have more fields
+                parameters: [], // simplifying for now
+                code: ''
+            } as unknown as EffectDefinition));
+            setRegistryEffects(effects);
+        } else {
             setRegistryEffects(getAllEffects());
+        }
+
+        const unsubscribe = subscribeToEffects(() => {
+            if (libraryPipeline) {
+                // Re-fetch from pipeline
+                const effects = libraryPipeline.getItems('effect').map(e => ({
+                    id: e.id, name: e.name, parameters: [], code: ''
+                } as unknown as EffectDefinition));
+                setRegistryEffects(effects);
+            } else {
+                setRegistryEffects(getAllEffects());
+            }
         });
         return unsubscribe;
-    }, []);
+    }, [libraryPipeline]);
 
     const [filterPresets, setFilterPresets] = useState<Effect[]>([
         { id: 'fx_bw', name: 'Black & White', type: 'filter', value: 'grayscale(100%)', kind: 'grayscale', param: 100 },
@@ -71,7 +104,11 @@ const FXPanel: React.FC<FXPanelProps> = ({ onDragStart }) => {
                             <div
                                 key={idx}
                                 draggable
-                                onDragStart={(e) => onDragStart(e, anim, 'animation')}
+                                onDragStart={(e) => {
+                                    // Sanitize to remove React Node (icon) which crashes JSON.stringify
+                                    const { icon, ...others } = anim;
+                                    onDragStart(e, others, 'animation');
+                                }}
                                 className="bg-[#27272a] hover:bg-[#3f3f46] p-2 rounded cursor-grab border border-[#3f3f46] flex flex-col items-center justify-center gap-1 transition text-gray-300 hover:text-white relative group"
                                 title="Drag to clip"
                             >

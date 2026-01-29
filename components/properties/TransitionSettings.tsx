@@ -123,7 +123,7 @@ export const TransitionSettings: React.FC<TransitionSettingsProps> = ({ clip, al
 
                             return (
                                 <div className="space-y-2 border-t border-[#3f3f46]/30 pt-2">
-                                    {selectedTransition.variables.map(v => (
+                                    {selectedTransition.variables?.map(v => (
                                         <div key={v.key} className="space-y-1">
                                             <label className="text-[10px] text-gray-400 block">{v.name}</label>
                                             {v.type === 'select' ? (
@@ -327,7 +327,7 @@ export const TransitionSettings: React.FC<TransitionSettingsProps> = ({ clip, al
                             </select>
 
                             {/* Dynamic Variables */}
-                            {selectedTransition && selectedTransition.variables.map(v => (
+                            {selectedTransition && selectedTransition.variables?.map(v => (
                                 <div key={v.key} className="col-span-2 space-y-1 mt-2 border-t border-[#3f3f46]/30 pt-2">
                                     <label className="text-[10px] text-gray-400 block">{v.name}</label>
                                     {v.type === 'select' ? (

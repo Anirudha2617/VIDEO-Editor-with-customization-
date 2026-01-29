@@ -9,6 +9,7 @@ import { generateTimelineScript } from '../../services/ai/GeminiProvider';
 import { MediaPipeline } from '../../pipelines/media';
 import { TimelinePipeline } from '../../pipelines/timeline';
 import { ProjectPipeline } from '../../pipelines/project';
+import { LibraryPipeline } from '../../pipelines/library';
 
 interface ScriptPanelProps {
     tracks: Track[];
@@ -22,6 +23,7 @@ interface ScriptPanelProps {
     selectedClipIds: string[];
     onSelectClip: (id: string) => void;
     mediaPipeline: MediaPipeline;
+    libraryPipeline: LibraryPipeline;
 }
 
 interface ConsoleOutput {
@@ -34,7 +36,7 @@ type TabType = 'ai' | 'console' | 'state';
 
 const ScriptPanel: React.FC<ScriptPanelProps> = ({
     tracks, clips, assets, onApplyScript, onAddClip, onUpdateClip, onRemoveClip, onAddAsset,
-    selectedClipIds, onSelectClip, mediaPipeline
+    selectedClipIds, onSelectClip, mediaPipeline, libraryPipeline
 }) => {
     // Tab State
     const [activeTab, setActiveTab] = useState<TabType>('ai');
@@ -136,6 +138,8 @@ declare function addClip(assetIdOrName: string, config: {
     x?: number;
     y?: number;
 }): { id: string };
+
+declare function addRawClip(clip: any): { id: string };
 
 declare function removeClip(id: string): void;
 declare function updateClip(id: string, updates: any): void;
@@ -242,7 +246,9 @@ declare const clips: any[];
                 onRemoveClip,
                 (content) => {
                     addOutput('result', content);
-                }
+                },
+                libraryPipeline,
+                selectedClipIds // Pass selected clips
             );
 
             const contextWithClips = { ...context, clips };
@@ -291,7 +297,9 @@ declare const clips: any[];
                 onRemoveClip,
                 (content) => {
                     addOutput('result', content);
-                }
+                },
+                libraryPipeline,
+                selectedClipIds // Pass selected clips
             );
 
             const contextWithClips = { ...context, clips };

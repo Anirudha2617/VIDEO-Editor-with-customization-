@@ -133,7 +133,7 @@ const Timeline: React.FC<TimelineProps> = ({
     const handleTimelineClick = (e: React.MouseEvent) => {
         if ((e.target as HTMLElement).closest('[data-clip-id]')) return;
         seekFromEvent(e.clientX);
-        onClearSelection();
+        // onClearSelection();
     };
 
     /* -------------------------------------------------- */
