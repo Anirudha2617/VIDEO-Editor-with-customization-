@@ -41,15 +41,15 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     if (isDocked) {
         return (
             <div
-                className="flex flex-col h-full w-full bg-[#18181b] overflow-hidden border-b border-[#27272a] last:border-b-0"
+                className="flex flex-col h-full w-full bg-transparent overflow-hidden"
             >
                 {/* Simple Header for Docked State */}
-                <div className="h-9 flex items-center justify-between px-3 bg-[#27272a] border-b border-[#3f3f46] shrink-0">
+                <div className="h-9 flex items-center justify-between px-3 border-b border-white/5 shrink-0">
                     <span className="text-xs font-semibold text-gray-200">{title}</span>
                     <div className="flex items-center gap-1">
                         <button
                             onClick={() => onUndock(id)}
-                            className="text-gray-500 hover:text-white hover:bg-[#3f3f46] p-1 rounded transition-colors"
+                            className="text-gray-500 hover:text-white hover:bg-white/5 p-1 rounded transition-colors"
                             title="Undock to Floating Window"
                         >
                             <Minimize2 size={12} />
@@ -84,7 +84,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                 });
             }}
             onMouseDown={onFocus}
-            className={`flex flex-col bg-[#18181b]/95 backdrop-blur-md border border-[#27272a] rounded-lg shadow-2xl overflow-hidden`}
+            className={`flex flex-col bg-[#18181b] border border-[#27272a] rounded-lg shadow-xl overflow-hidden`}
             style={{ zIndex, display: 'flex' }}
             dragHandleClassName="panel-drag-handle"
             enableUserSelectHack={false}
@@ -94,9 +94,9 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
             enableResizing={true}
         >
             {/* Header */}
-            <div className="panel-drag-handle h-9 flex items-center justify-between px-3 bg-[#27272a] border-b border-[#3f3f46] cursor-grab active:cursor-grabbing select-none shrink-0 group">
+            <div className="panel-drag-handle h-9 flex items-center justify-between px-3 bg-[#18181b] border-b border-[#27272a] cursor-grab active:cursor-grabbing select-none shrink-0 group">
                 <div className="flex items-center gap-2">
-                    <GripHorizontal size={14} className="text-gray-500 group-hover:text-gray-300" />
+                    <GripHorizontal size={14} className="text-gray-500 group-hover:text-gray-300 transition-colors" />
                     <span className="text-xs font-semibold text-gray-200">{title}</span>
                 </div>
                 <div className="flex items-center gap-1">

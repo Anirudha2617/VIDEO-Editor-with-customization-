@@ -40,7 +40,7 @@ export const Ribbon: React.FC<RibbonProps> = ({ onTogglePanel, onResetLayout, ac
             <div className="relative z-50">
                 <button
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-gray-200 bg-[#27272a] border border-white/10 shadow-sm hover:bg-[#3f3f46] transition-colors"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-gray-200 bg-[#27272a] border border-[#3f3f46] shadow-sm hover:bg-[#3f3f46] transition-colors"
                 >
                     <Menu size={14} />
                     Tools
@@ -89,7 +89,7 @@ export const Ribbon: React.FC<RibbonProps> = ({ onTogglePanel, onResetLayout, ac
 
     return (
         <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 bg-[#27272a]/50 p-1 rounded-lg border border-white/5 no-scrollbar overflow-x-auto max-w-[50vw]">
+            <div className="flex items-center gap-1 bg-[#27272a] p-1 rounded-lg border border-[#3f3f46] no-scrollbar overflow-x-auto max-w-[50vw]">
                 {tools.map((tool) => (
                     <button
                         key={tool.id}
@@ -110,7 +110,7 @@ export const Ribbon: React.FC<RibbonProps> = ({ onTogglePanel, onResetLayout, ac
 
             <button
                 onClick={onResetLayout}
-                className="flex flex-shrink-0 items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-white hover:bg-[#3f3f46] transition-all bg-[#27272a]/50 border border-white/5"
+                className="flex flex-shrink-0 items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-white hover:bg-[#3f3f46] transition-all bg-[#27272a] border border-[#3f3f46]"
             >
                 <LayoutGrid size={14} />
                 {isDesktop && <span>Reset Layout</span>}

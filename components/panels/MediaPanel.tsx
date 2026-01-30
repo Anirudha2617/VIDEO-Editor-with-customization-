@@ -178,7 +178,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
     }, []);
 
     return (
-        <div className="h-full overflow-y-auto p-4 custom-scrollbar bg-[#18181b] relative">
+        <div className="h-full overflow-y-auto p-4 custom-scrollbar bg-transparent relative">
             {editingAsset && (
                 <ImageEditor
                     src={editingAsset.src}

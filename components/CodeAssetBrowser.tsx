@@ -61,7 +61,10 @@ h1 {
     const [height, setHeight] = useState(1080);
     const [duration, setDuration] = useState(3);
     const [fps, setFps] = useState(30);
+    const [fps, setFps] = useState(30);
     const [transparentBg, setTransparentBg] = useState(true);
+    const [previewSourceId, setPreviewSourceId] = useState<string | null>(null);
+    const [backgroundSourceId, setBackgroundSourceId] = useState<string | null>(null);
 
     // State
     const [rendering, setRendering] = useState(false);
@@ -89,7 +92,7 @@ h1 {
         }, 500); // Debounced
 
         return () => clearTimeout(timer);
-    }, [html, css, js, transparentBg, assets]); // Re-run if assets change
+    }, [html, css, js, transparentBg, assets, previewSourceId, backgroundSourceId]); // Re-run if assets change
 
     const updatePreview = () => {
         const iframe = previewIframeRef.current;
@@ -206,25 +209,117 @@ h1 {
                          };
                      } else {
                          // Transition Preview
+                         // Load Preview Assets
+                         const sourceAVal = ${JSON.stringify(previewSourceId)};
+                         const sourceBVal = ${JSON.stringify(backgroundSourceId)};
+                         
+                         let imgA = null;
+                         let imgB = null;
+
+                         if (sourceAVal) {
+                             imgA = new Image();
+                             imgA.src = getAssetUrl(sourceAVal);
+                         }
+                         if (sourceBVal) {
+                             imgB = new Image();
+                             imgB.src = getAssetUrl(sourceBVal);
+                         }
+
+                         // Wait for at least one to be ready if present? 
+                         // For simplicity in preview, we just let them load and draw when ready.
+
                          function render() {
                              ctx.clearRect(0,0, canvas.width, canvas.height);
                              
-                             // Simulate "From" and "To" clips
-                             ctx.fillStyle = '#111';
-                             ctx.fillRect(0,0,canvas.width, canvas.height);
+                             // 1. Draw Background (Source B - "To" clip for Exit, or "From" clip for Enter??)
+                             // Standard Transition model:
+                             // If isExit=true: We are transitioning OUT of Source A, revealing Source B.
+                             // If isExit=false: We are transitioning IN Source A, covering Source B.
                              
-                             // Draw Transition content
+                             // Let's assume Standard:
+                             // Bottom Layer: Source B (Background / Outgoing / Incoming depending on logic)
+                             // Top Layer: Source A (Foreground / Active Clip)
+                             
+                             // Draw Source B (Background)
+                             if (imgB && imgB.complete) {
+                                 ctx.drawImage(imgB, 0, 0, canvas.width, canvas.height);
+                             } else {
+                                 ctx.fillStyle = '#111';
+                                 ctx.fillRect(0,0,canvas.width, canvas.height);
+                                 ctx.fillStyle = '#333';
+                                 ctx.font = '30px Arial';
+                                 ctx.textAlign = 'center';
+                                 ctx.fillText('Background (B)', canvas.width/2, canvas.height/2);
+                             }
+                             
+                             // 2. Prepare Source A
+                             // We don't draw it directly yet, we let the transition Apply handle it?
+                             // OR, standard transitions usually apply transformations to the context and then we draw the clip.
+                             // BUT, Custom Transitions defined here might do their own drawing or return transforms.
+                             
+                             // If the user script returns `customDraw`, they handle everything.
+                             // If they return `opacity`/`transform`, we must apply it and then draw Source A.
+                             
+                             // Let's Snapshot Source A if needed? 
+                             // Simplified Preview Harness:
+                             
+                             ctx.save(); // Save before transition
+                             
+                             const params = { color: '#ff0055' }; // Default params
+                             
+                             // Execute Transition Logic
                              const res = def.apply({ 
                                  ctx, 
                                  width: canvas.width, 
                                  height: canvas.height, 
                                  progress: progress, 
                                  isExit: false, 
-                                 params: { color: '#ff0055' } 
+                                 params 
                              });
                              
+                             // Apply returned transforms
+                             if (res) {
+                                  if (res.opacity !== undefined) ctx.globalAlpha = res.opacity;
+                                  if (res.offsetX || res.offsetY) ctx.translate(res.offsetX || 0, res.offsetY || 0);
+                                  if (res.scale !== undefined) {
+                                      ctx.translate(canvas.width/2, canvas.height/2);
+                                      ctx.scale(res.scale, res.scale);
+                                      ctx.translate(-canvas.width/2, -canvas.height/2);
+                                  }
+                                  if (res.rotation !== undefined) {
+                                      ctx.translate(canvas.width/2, canvas.height/2);
+                                      ctx.rotate(res.rotation * Math.PI / 180);
+                                      ctx.translate(-canvas.width/2, -canvas.height/2);
+                                  }
+                             }
+
+                             // Draw Source A (Foreground)
+                             if (imgA && imgA.complete) {
+                                 ctx.drawImage(imgA, 0, 0, canvas.width, canvas.height);
+                             } else {
+                                 // Default Placeholder Box if no image selected
+                                 if (!imgA) {
+                                     // Only draw placeholder if NOT custom drawing everything
+                                     if (!res?.customDraw) {
+                                         ctx.fillStyle = '#3b82f6';
+                                         ctx.fillRect(canvas.width/4, canvas.height/4, canvas.width/2, canvas.height/2);
+                                         ctx.fillStyle = 'white';
+                                         ctx.font = 'bold 40px Arial';
+                                         ctx.textAlign = 'center';
+                                         ctx.fillText('Source A', canvas.width/2, canvas.height/2);
+                                     }
+                                 }
+                             }
+                             
+                             // Handle Custom Draw (Post-standard draw)
+                             if (res?.customDraw) {
+                                 res.customDraw(ctx, canvas.width, canvas.height);
+                             }
+                             
+                             ctx.restore(); // Restore context
+
                              // If overlay color returned (typical for wipe)
-                             if (res.overlayColor) {
+                             if (res?.overlayColor) {
                                  ctx.fillStyle = res.overlayColor.style;
                                  ctx.globalAlpha = res.overlayColor.opacity;
                                  ctx.fillRect(0,0, canvas.width, canvas.height);
@@ -753,6 +848,24 @@ const vid_${cleanName} = createVideo("${asset.name}");
                                         </div>
                                     </div>
                                     <div className="mt-1 text-[9px] text-gray-400 truncate px-1 group-hover:text-cyan-400">{asset.name}</div>
+
+                                    {/* Preview Setters */}
+                                    <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setPreviewSourceId(asset.id); }}
+                                            className={`p-1 rounded text-[8px] font-bold ${previewSourceId === asset.id ? 'bg-blue-600 text-white' : 'bg-black/60 text-gray-300 hover:bg-blue-500'}`}
+                                            title="Set as Source A"
+                                        >
+                                            A
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setBackgroundSourceId(asset.id); }}
+                                            className={`p-1 rounded text-[8px] font-bold ${backgroundSourceId === asset.id ? 'bg-purple-600 text-white' : 'bg-black/60 text-gray-300 hover:bg-purple-500'}`}
+                                            title="Set as Background (B)"
+                                        >
+                                            B
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>

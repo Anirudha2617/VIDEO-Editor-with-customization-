@@ -504,8 +504,8 @@ const Player: React.FC<PlayerProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#000000]">
-      <div className="flex-1 relative flex items-center justify-center overflow-hidden p-8 bg-[#09090b]">
+    <div className="flex flex-col h-full bg-transparent">
+      <div className="flex-1 relative flex items-center justify-center overflow-hidden p-8 bg-black/40">
         <div
           ref={containerRef}
           className={`relative shadow-2xl overflow-hidden ring-1 ring-[#27272a] bg-black group ${isFullscreen ? 'w-full h-full ring-0' : 'h-full max-w-full'}`}
@@ -535,7 +535,7 @@ const Player: React.FC<PlayerProps> = ({
           </div>
         </div>
       </div>
-      <div className="h-14 bg-[#18181b] border-t border-[#27272a] flex items-center justify-center gap-6 px-4">
+      <div className="h-14 bg-white/5 backdrop-blur-md border-t border-white/5 flex items-center justify-center gap-6 px-4">
         <div className="flex-1 text-xs font-mono text-gray-400">{new Date(currentTime * 1000).toISOString().substr(11, 8)} / {new Date(duration * 1000).toISOString().substr(11, 8)}</div>
         <div className="flex items-center gap-4">
           <button onClick={onTogglePlay} className="w-8 h-8 rounded bg-white text-black flex items-center justify-center hover:bg-gray-200">{isPlaying ? <Pause size={16} fill="black" /> : <Play size={16} fill="black" className="ml-0.5" />}</button>

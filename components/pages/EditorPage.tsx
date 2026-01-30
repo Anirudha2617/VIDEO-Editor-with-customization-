@@ -897,7 +897,7 @@ export function EditorPage() {
     };
 
     return (
-        <div className="flex flex-col h-screen overflow-hidden bg-[var(--bg-root)] text-[var(--text-primary)] font-sans">
+        <div className="flex flex-col h-screen overflow-hidden bg-black text-[var(--text-primary)] font-sans selection:bg-[var(--selection-bg)] selection:text-[var(--accent-primary)]">
 
             {/* HEADER */}
             <header className="h-12 border-b border-[var(--border-base)] flex items-center justify-between px-4 bg-[var(--bg-header)] z-50 shrink-0">
@@ -1061,11 +1061,11 @@ export function EditorPage() {
 
 
             {/* WORKSPACE AREA */}
-            <div className="flex-1 flex overflow-hidden relative bg-[var(--bg-root)]">
+            <div className="flex-1 flex overflow-hidden relative p-3 gap-3">
 
                 {/* LEFT DOCK */}
                 {panels.some(p => p.isOpen && p.isDocked && p.dockSide === 'left') && (
-                    <div style={{ width: sidebarWidth }} className="flex-shrink-0 flex flex-col border-r border-[var(--border-base)] bg-[var(--bg-panel)] relative z-20 h-full">
+                    <div style={{ width: sidebarWidth }} className="flex-shrink-0 flex flex-col glass-panel rounded-xl relative z-20 h-full">
                         <div className="flex-1 flex flex-col overflow-hidden">
                             {panels.filter(p => p.isOpen && p.isDocked && p.dockSide === 'left').map(panel => (
                                 <div key={panel.id} className="flex-1 relative overflow-hidden flex flex-col min-h-0">
@@ -1100,7 +1100,7 @@ export function EditorPage() {
 
                     {/* TOP DOCK */}
                     {panels.some(p => p.isOpen && p.isDocked && p.dockSide === 'top') && (
-                        <div style={{ height: topHeight }} className="flex-shrink-0 flex flex-col border-b border-[var(--border-base)] bg-[var(--bg-panel)] relative z-20">
+                        <div style={{ height: topHeight }} className="flex-shrink-0 flex flex-col glass-panel rounded-xl mb-3 relative z-20">
                             <div className="flex-1 flex overflow-hidden">
                                 {panels.filter(p => p.isOpen && p.isDocked && p.dockSide === 'top').map(panel => (
                                     <div key={panel.id} className="flex-1 relative overflow-hidden flex flex-col">
@@ -1131,7 +1131,7 @@ export function EditorPage() {
                     )}
 
                     {/* CENTER DOCK & FLOATING AREA */}
-                    <div className="flex-1 flex overflow-hidden relative bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:20px_20px]">
+                    <div className="flex-1 flex overflow-hidden relative rounded-xl glass-panel">
                         {/* Render Center Docked Panels */}
                         {panels.some(p => p.isOpen && p.isDocked && p.dockSide === 'center') ? (
                             <div className="w-full h-full flex flex-col overflow-hidden">
@@ -1167,7 +1167,7 @@ export function EditorPage() {
 
                     {/* BOTTOM DOCK */}
                     {panels.some(p => p.isOpen && p.isDocked && p.dockSide === 'bottom') && (
-                        <div style={{ height: bottomHeight }} className="flex-shrink-0 flex flex-col border-t border-[var(--border-base)] bg-[var(--bg-panel)] relative z-20">
+                        <div style={{ height: bottomHeight }} className="flex-shrink-0 flex flex-col glass-panel rounded-xl mt-3 relative z-20">
                             <div className="resizer-h absolute top-0 left-0 right-0 cursor-row-resize group z-30 h-2 -mt-1 hover:bg-transparent transition-colors" onMouseDown={() => setIsResizing('bottom')}>
                                 <div className="absolute top-1 w-full h-px bg-[var(--border-base)] group-hover:bg-[var(--accent-primary)] transition-colors"></div>
                             </div>
@@ -1200,7 +1200,7 @@ export function EditorPage() {
 
                 {/* RIGHT DOCK */}
                 {((panels.some(p => p.isOpen && p.isDocked && p.dockSide === 'right')) || (selectedClips.length > 0)) && (
-                    <div style={{ width: rightSidebarWidth }} className="flex-shrink-0 flex flex-col border-l border-[var(--border-base)] bg-[var(--bg-panel)] relative z-20 h-full">
+                    <div style={{ width: rightSidebarWidth }} className="flex-shrink-0 flex flex-col glass-panel rounded-xl ml-3 relative z-20 h-full">
                         <div className="resizer-v absolute left-0 top-0 bottom-0 cursor-col-resize group z-30 w-2 -ml-1 hover:bg-transparent transition-colors" onMouseDown={() => setIsResizing('rightSidebar')}>
                             <div className="absolute left-1 w-px h-full bg-[var(--border-base)] group-hover:bg-[var(--accent-primary)] transition-colors"></div>
                         </div>

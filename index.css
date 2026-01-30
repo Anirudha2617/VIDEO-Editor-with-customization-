@@ -3,44 +3,32 @@
 @tailwind utilities;
 
 :root {
-  /* Core Palette - Professional Dark */
-  --bg-root: #09090b;
-  /* Deepest background (app shell) */
-  --bg-panel: #121214;
-  /* Panel background */
-  --bg-header: #18181b;
-  /* Header/Toolbar background */
-  --bg-item: #27272a;
-  /* Item/Card background */
-  --bg-input: #000000;
-  /* Input field background */
-  --bg-hover: rgba(255, 255, 255, 0.05);
-  --bg-active: rgba(255, 255, 255, 0.1);
-
-  /* Borders & Dividers */
-  --border-base: #27272a;
-  /* Subtle divider */
-  --border-light: #3f3f46;
-  /* Input borders */
-  --border-w: 1px;
+  /* Luminous Clean Palette - Linear Style */
+  --bg-root: 9 9 11;
+  /* #09090b - Zinc 950 */
+  --bg-panel: 24 24 27;
+  /* #18181b - Zinc 900 */
+  --bg-header: 24 24 27;
+  /* #18181b */
+  --bg-item: 39 39 42;
+  /* #27272a - Zinc 800 */
 
   /* Text Colors */
   --text-primary: #f4f4f5;
   --text-secondary: #a1a1aa;
   --text-muted: #71717a;
 
-  /* Accents */
-  --accent-primary: #3b82f6;
-  /* Blue 500 */
-  --accent-hover: #2563eb;
-  /* Blue 600 */
-  --accent-glow: rgba(59, 130, 246, 0.5);
+  /* Accents - Desaturated Professional */
+  --accent-primary: 56 189 248;
+  /* Sky 400 */
+  --accent-secondary: 168 85 247;
+  /* Purple 500 */
+  --accent-destructive: 248 113 113;
 
   /* Selection */
-  --selection-bg: rgba(59, 130, 246, 0.3);
-  --selection-border: #3b82f6;
+  --selection-bg: rgba(56, 189, 248, 0.1);
+  --selection-border: rgba(56, 189, 248, 0.3);
 
-  /* Font */
   --font-sans: 'Inter', sans-serif;
 }
 
@@ -48,10 +36,50 @@ body {
   background-color: var(--bg-root);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  /* overflow: hidden; Removed to allow scrolling on Homepage/Docs */
-  /* App-like feel */
   user-select: none;
-  /* Prevent accidental text selection during drag */
+  overflow: hidden;
+  letter-spacing: normal;
+  /* Standard Tracking */
+}
+
+/* --- Glassmorphism System --- */
+
+.glass-panel {
+  background: rgb(var(--bg-panel));
+  /* Solid background for clean look */
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* Crisp visible border */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.glass-panel-heavy {
+  background: rgb(var(--bg-panel));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.glass-button:active {
+  transform: translateY(0);
+}
+
+.neon-text {
+  color: rgb(var(--accent-primary));
+}
+
+.text-glow {
+  /* Minimal/No glow for clean look */
 }
 
 /* Global Aesthetic Scrollbar */
@@ -171,7 +199,8 @@ body {
 /* Timeline Pro Features */
 
 .timeline {
-  background: #0b0f17;
+  background: transparent;
+  /* Changed from #0b0f17 to transparent for global noise */
 }
 
 .timeline-track {
@@ -180,13 +209,14 @@ body {
   padding: 2px 6px;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid #38435c;
-  background: linear-gradient(#0e1320, #0b101a);
+  border-bottom: 1px solid #27272a;
+  background: #18181b;
+  /* Solid Zinc 900 */
   position: relative;
 }
 
 .timeline-track:hover {
-  background: #11182a;
+  background: #27272a;
 }
 
 .timeline-track+.timeline-track {
@@ -195,14 +225,13 @@ body {
 
 .timeline-clip {
   height: 28px;
-  /* Fixed height for pro look */
   top: 50%;
   transform: translateY(-50%);
-  /* Center vertically */
   border-radius: 4px;
-  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  background: #3f3f46;
+  /* Solid Zinc 700 */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   z-index: 10;
 }
 

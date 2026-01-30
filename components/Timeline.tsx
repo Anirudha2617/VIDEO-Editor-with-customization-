@@ -371,11 +371,13 @@ const Timeline: React.FC<TimelineProps> = ({
 
     return (
         <div
-            className="timeline flex flex-col h-full bg-[var(--bg-root)] text-xs select-none relative"
+            className="timeline flex flex-col h-full bg-transparent text-xs select-none relative"
             onClick={() => setContextMenu(prev => ({ ...prev, visible: false }))}
         >
             {/* Toolbar (Same) */}
-            <div className="h-10 bg-[var(--bg-header)]/90 backdrop-blur-md border-t border-[var(--border-base)] flex items-center justify-between px-3 z-40 relative">
+            {/* Toolbar (Same) */}
+            {/* Toolbar (Same) */}
+            <div className="h-10 bg-[#18181b] border-t border-[#27272a] flex items-center justify-between px-3 z-40 relative">
                 <div className="flex items-center gap-1 bg-[var(--bg-item)] p-0.5 rounded-lg border border-[var(--border-light)]">
                     <button onClick={onAddTrack} className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-white transition-all text-[10px] font-medium"><Plus size={11} /> Track</button>
                     <div className="h-3 w-px bg-white/10 mx-1" />
@@ -396,7 +398,7 @@ const Timeline: React.FC<TimelineProps> = ({
             {/* Timeline Area */}
             <div className="flex-1 flex flex-col overflow-hidden relative">
                 <div
-                    className="flex-1 overflow-auto bg-[var(--bg-root)] relative custom-scrollbar"
+                    className="flex-1 overflow-auto bg-transparent relative custom-scrollbar"
                     ref={timelineRef}
                     onClick={handleTimelineClick}
                     onScroll={updateVisibleRange}
@@ -404,8 +406,8 @@ const Timeline: React.FC<TimelineProps> = ({
                     onDrop={handleExternalDrop}
                 >
                     {/* Ruler */}
-                    <div className="flex h-8 bg-[var(--bg-panel)] min-w-max sticky top-0 z-30 border-b border-[var(--border-base)]">
-                        <div className="w-[200px] border-r border-[var(--border-base)] bg-[var(--bg-panel)] z-40 sticky left-0 flex items-center justify-center">
+                    <div className="flex h-8 bg-[#18181b] min-w-max sticky top-0 z-30 border-b border-[#27272a]">
+                        <div className="w-[200px] border-r border-[#27272a] bg-[#18181b] z-40 sticky left-0 flex items-center justify-center">
                             <div className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-widest">Tracks</div>
                         </div>
                         <div className="relative h-full cursor-pointer overflow-hidden pt-2" style={{ width: duration * zoom }} ref={rulerRef}>
@@ -453,7 +455,7 @@ const Timeline: React.FC<TimelineProps> = ({
                             return (
                                 <div key={track.id} data-track-id={track.id} className="flex group/track hover:bg-white/[0.02] transition-colors" style={{ height: TimelineEngine.TRACK_HEIGHT }}>
                                     {/* Header */}
-                                    <div className="w-[200px] sticky left-0 z-20 border-r border-[var(--border-base)] bg-[var(--bg-panel)] flex items-center px-4 justify-between group-hover/track:bg-[var(--bg-hover)]/30 transition-colors">
+                                    <div className="w-[200px] sticky left-0 z-20 border-r border-[#27272a] bg-[#18181b] flex items-center px-4 justify-between group-hover/track:bg-[#27272a] transition-colors">
                                         <div className="flex items-center gap-2">
                                             {getIcon(track.type)}
                                             <span className="text-[11px] font-medium text-gray-300 truncate w-20">{track.name}</span>
