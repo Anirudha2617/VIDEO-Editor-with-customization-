@@ -1,5 +1,7 @@
 import { Asset, Clip, Track, MediaType, Effect, AnimationType, Transition, TransitionContext, TransitionResult } from '../models';
 import { registerTransition } from '../transitions/registry';
+import { registerEffect } from '../effects/registry';
+import { EffectDefinition } from '../models/Effect';
 import { MediaPipeline } from '../pipelines/media';
 import { TimelinePipeline } from '../pipelines/timeline';
 import { ProjectPipeline } from '../pipelines/project';
@@ -68,6 +70,7 @@ export interface ScriptExecutionContext {
 
     // Custom transition registration
     registerTransition: (config: TransitionConfig | Transition) => void;
+    registerEffect: (config: EffectDefinition) => void;
 
     // Utility
     display: (content: any) => void;
@@ -305,7 +308,12 @@ export const createExecutionContext = (
             }
 
             registerTransition(transition);
+            registerTransition(transition);
             onDisplay(`✓ Registered transition: ${transition.name} `);
+        },
+        registerEffect: (config: EffectDefinition) => {
+            registerEffect(config);
+            onDisplay(`✓ Registered effect: ${config.name}`);
         },
         display: (content: any) => {
             onDisplay(content);

@@ -131,6 +131,42 @@ export const EffectSettings: React.FC<EffectSettingsProps> = ({ clip, onUpdate }
                                         />
                                         <div className="text-[9px] text-gray-500 text-center">{effect.effectParams?.[v.key] ?? v.defaultValue}</div>
                                     </div>
+                                ) : v.type === 'boolean' ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={effect.effectParams?.[v.key] ?? v.defaultValue}
+                                            onChange={(e) => {
+                                                const newEffects = [...safeEffects];
+                                                const currentParams = newEffects[0].effectParams || {};
+                                                newEffects[0] = {
+                                                    ...newEffects[0],
+                                                    effectParams: { ...currentParams, [v.key]: e.target.checked }
+                                                };
+                                                onUpdate({ effects: newEffects });
+                                            }}
+                                            className="h-3 w-3 rounded border-gray-600 text-pink-500 focus:ring-pink-500 bg-[#3f3f46]"
+                                        />
+                                        <span className="text-[10px] text-gray-400">{v.name}</span>
+                                    </div>
+                                ) : v.type === 'select' ? (
+                                    <select
+                                        value={effect.effectParams?.[v.key] ?? v.defaultValue}
+                                        onChange={(e) => {
+                                            const newEffects = [...safeEffects];
+                                            const currentParams = newEffects[0].effectParams || {};
+                                            newEffects[0] = {
+                                                ...newEffects[0],
+                                                effectParams: { ...currentParams, [v.key]: e.target.value }
+                                            };
+                                            onUpdate({ effects: newEffects });
+                                        }}
+                                        className="w-full bg-[#09090b] border border-[#3f3f46] rounded px-2 py-1 text-xs text-gray-300 outline-none focus:border-pink-500"
+                                    >
+                                        {v.options?.map(opt => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                        ))}
+                                    </select>
                                 ) : null}
                             </div>
                         ))}
@@ -257,6 +293,26 @@ export const EffectSettings: React.FC<EffectSettingsProps> = ({ clip, onUpdate }
                                                 className="w-full h-24 bg-[#09090b] border border-[#3f3f46] rounded p-2 text-[10px] font-mono text-pink-400 focus:outline-none resize-none"
                                                 spellCheck={false}
                                             />
+                                        ) : v.type === 'boolean' ? (
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={effect.effectParams?.[v.key] ?? v.defaultValue}
+                                                    onChange={(e) => updateEffectParam(index, v.key, e.target.checked)}
+                                                    className="h-3 w-3 rounded border-gray-600 text-pink-500 focus:ring-pink-500 bg-[#3f3f46]"
+                                                />
+                                                <span className="text-[10px] text-gray-400">Enabled</span>
+                                            </div>
+                                        ) : v.type === 'select' ? (
+                                            <select
+                                                value={effect.effectParams?.[v.key] ?? v.defaultValue}
+                                                onChange={(e) => updateEffectParam(index, v.key, e.target.value)}
+                                                className="w-full bg-[#09090b] border border-[#3f3f46] rounded px-2 py-1 text-xs text-gray-300 outline-none focus:border-pink-500"
+                                            >
+                                                {v.options?.map(opt => (
+                                                    <option key={opt} value={opt}>{opt}</option>
+                                                ))}
+                                            </select>
                                         ) : null}
                                     </div>
                                 ))}

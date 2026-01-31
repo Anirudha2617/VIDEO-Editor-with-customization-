@@ -172,6 +172,9 @@ declare function addTransition(
     duration?: number
 ): void;
 
+declare function registerTransition(config: any): void;
+declare function registerEffect(config: any): void;
+
 // External Resources
 declare function addAssetFromUrl(url: string, name?: string): Promise<any>;
 
@@ -331,7 +334,7 @@ declare const clips: any[];
 
     const addOutput = (type: ConsoleOutput['type'], content: any) => {
         setConsoleOutputs(prev => [...prev, {
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             type,
             content
         }]);

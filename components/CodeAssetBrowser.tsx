@@ -61,7 +61,7 @@ h1 {
     const [height, setHeight] = useState(1080);
     const [duration, setDuration] = useState(3);
     const [fps, setFps] = useState(30);
-    const [fps, setFps] = useState(30);
+
     const [transparentBg, setTransparentBg] = useState(true);
     const [previewSourceId, setPreviewSourceId] = useState<string | null>(null);
     const [backgroundSourceId, setBackgroundSourceId] = useState<string | null>(null);
@@ -257,8 +257,8 @@ h1 {
                              // OR, standard transitions usually apply transformations to the context and then we draw the clip.
                              // BUT, Custom Transitions defined here might do their own drawing or return transforms.
                              
-                             // If the user script returns `customDraw`, they handle everything.
-                             // If they return `opacity`/`transform`, we must apply it and then draw Source A.
+                             // If the user script returns \`customDraw\`, they handle everything.
+                             // If they return \`opacity\`/\`transform\`, we must apply it and then draw Source A.
                              
                              // Let's Snapshot Source A if needed? 
                              // Simplified Preview Harness:

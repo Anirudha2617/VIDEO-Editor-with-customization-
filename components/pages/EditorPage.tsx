@@ -22,7 +22,7 @@ import { useAutosave } from '../../hooks/useAutosave';
 import { loadAutosave } from '../../services/projectService';
 import { getCodeAssets } from '../../services/codeAssetStorage';
 import { registerTransition } from '../../transitions/registry';
-import { registerEffect } from '../../effects/registry';
+import { registerEffect, getEffect } from '../../effects/registry';
 import { getDemoContent } from '../../utils/demoContent';
 import { saveProjectToFile, loadProjectFromFile } from '../../services/persistenceService';
 import { useMediaLibrary } from '../../hooks/useMediaLibrary';
@@ -468,7 +468,43 @@ export function EditorPage() {
     };
 
     const handleCreateEffectClip = (effect: Effect, trackId: string, time: number) => {
-        const newClip: Clip = { id: crypto.randomUUID(), assetId: 'fx_' + effect.id, trackId, start: time, duration: 3, offset: 0, name: effect.name, type: MediaType.EFFECT, src: '', effects: [effect], animationDuration: 0 };
+        // Hydrate Effect Params if missing (for Custom Effects dropped from panel)
+        let initializedEffects = [effect];
+
+        // Check if this is a registry effect (by ID or Kind)
+        // FXPanel sends { id: def.id, kind: 'registry' } or we might check getEffect(effect.id)
+        const def = getEffect(effect.id) || getEffect(effect.kind || '');
+
+        if (def) {
+            const newEffect: Effect = {
+                ...effect,
+                id: crypto.randomUUID(), // Ensure unique instance ID
+                kind: def.id,            // Link to registry ID
+                effectParams: effect.effectParams || {}
+            };
+
+            // Apply defaults
+            def.variables.forEach(v => {
+                if (newEffect.effectParams![v.key] === undefined) {
+                    newEffect.effectParams![v.key] = v.defaultValue;
+                }
+            });
+            initializedEffects = [newEffect];
+        }
+
+        const newClip: Clip = {
+            id: crypto.randomUUID(),
+            assetId: 'fx_' + effect.id,
+            trackId,
+            start: time,
+            duration: 3,
+            offset: 0,
+            name: effect.name,
+            type: MediaType.EFFECT,
+            src: '',
+            effects: initializedEffects,
+            animationDuration: 0
+        };
         globalCommandManager.execute(new AddClipCommand(commandContext, newClip));
         setSelectedClipIds([newClip.id]); setCurrentTime(time);
     };
@@ -803,11 +839,16 @@ export function EditorPage() {
                 />
             );
             case 'audio': return <AudioPanel onAddAsset={handleAddAsset} mediaPipeline={unifiedMediaPipeline} />;
-            case 'text': return <TextPanel onAddText={(text, options) => {
-                const asset: Asset = { id: crypto.randomUUID(), type: MediaType.TEXT, src: '', name: text };
-                (asset as any).textProps = { text, ...options };
-                setAssets(prev => [...prev, asset]);
-            }} libraryPipeline={libraryPipeline} />;
+            case 'text': return <TextPanel
+                assets={assets}
+                onDragStart={handleDragStart}
+                onAddText={(text, options) => {
+                    const asset: Asset = { id: crypto.randomUUID(), type: MediaType.TEXT, src: '', name: text };
+                    (asset as any).textProps = { text, ...options };
+                    setAssets(prev => [...prev, asset]);
+                }}
+                libraryPipeline={libraryPipeline}
+            />;
             case 'shapes': return <ShapesPanel onDragStart={handleDragStart} />;
             case 'fx': return <FXPanel onDragStart={handleDragStart} libraryPipeline={libraryPipeline} />;
             case 'code': return <CodePanel onAddAsset={handleAddAsset} assets={assets} />;
