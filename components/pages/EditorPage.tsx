@@ -33,6 +33,7 @@ import { createTimelinePipeline } from '../../pipelines/timeline';
 import { createProjectPipeline } from '../../pipelines/project';
 import { createMediaPipeline } from '../../pipelines/media';
 import { createLibraryPipeline } from '../../pipelines/library';
+import { VideoExportPipeline } from '../../pipelines/VideoExportPipeline';
 
 const INITIAL_TRACKS: Track[] = [
     { id: 't1', type: MediaType.VIDEO, name: 'Video Track 1' },
@@ -42,16 +43,64 @@ const INITIAL_TRACKS: Track[] = [
 ];
 
 const INITIAL_ASSETS: Asset[] = [
-    { id: 'a1', type: MediaType.IMAGE, src: 'https://picsum.photos/800/450?random=1', name: 'Sample Landscape', width: 800, height: 450 },
-    { id: 'a2', type: MediaType.IMAGE, src: 'https://picsum.photos/800/450?random=2', name: 'Urban Shot', width: 800, height: 450 },
+    {
+        id: 'sample_img1',
+        type: MediaType.IMAGE,
+        src: '/1samples/470641114_1101856421609220_6135090431880619061_n.jpg',
+        name: 'Sample Image 1',
+        width: 1920,
+        height: 1080
+    },
+    {
+        id: 'sample_img2',
+        type: MediaType.IMAGE,
+        src: '/1samples/assignment%20.jpeg',
+        name: 'Assignment',
+        width: 1920,
+        height: 1080
+    },
+    {
+        id: 'sample_audio1',
+        type: MediaType.AUDIO,
+        src: '/1samples/Ilahi%20Full%20Video%20Song%20_%20Yeh%20Jawaani%20Hai%20Deewani%20_%20Ranbir%20Kapoor,%20Deepika%20Padukone%20_%20Pritam.weba',
+        name: 'Ilahi Song',
+        duration: 30
+    },
+];
+
+const INITIAL_TEST_CLIPS: Clip[] = [
+    {
+        id: 'clip_v1',
+        assetId: 'sample_img1',
+        trackId: 't1',
+        start: 0,
+        duration: 10,
+        offset: 0,
+        name: 'Sample Image Clip',
+        type: MediaType.IMAGE,
+        src: INITIAL_ASSETS[0].src,
+        x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, width: 1920, height: 1080, effects: [], animationDuration: 0
+    },
+    {
+        id: 'clip_a1',
+        assetId: 'sample_audio1',
+        trackId: 't4',
+        start: 0,
+        duration: 10,
+        offset: 0,
+        name: 'Ilahi Audio Clip',
+        type: MediaType.AUDIO,
+        src: INITIAL_ASSETS[2].src,
+        effects: [], animationDuration: 0
+    }
 ];
 
 export function EditorPage() {
     const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS);
     const { assets, setAssets, importFiles, removeAsset, updateAsset } = useMediaLibrary(INITIAL_ASSETS);
-    const [clips, setClips] = useState<Clip[]>([]);
+    const [clips, setClips] = useState<Clip[]>(INITIAL_TEST_CLIPS);
     const [currentTime, setCurrentTime] = useState(0);
-    const [duration, setDuration] = useState(300);
+    const [duration, setDuration] = useState(30);
     const [isPlaying, setIsPlaying] = useState(false);
     const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
     const [clipboard, setClipboard] = useState<Clip[]>([]);
@@ -573,10 +622,35 @@ export function EditorPage() {
             return;
         }
 
+
         setExportStatus('exporting');
         setExportProgress(0);
-        setCurrentTime(exportSettings.startTime);
-        setIsPlaying(true);
+        setIsPlaying(false); // Do NOT play for fast export
+
+        // Run in timeout to allow UI to update to 'exporting' state
+        setTimeout(async () => {
+            try {
+                const project: Project = {
+                    id: crypto.randomUUID(),
+                    name: exportSettings.filename || 'Project',
+                    version: '1.0.0',
+                    lastModified: Date.now(),
+                    state: {
+                        tracks, clips, assets, duration,
+                        exportSettings, canvasWidth, canvasHeight, customFonts
+                    }
+                };
+
+                const pipeline = new VideoExportPipeline();
+                await pipeline.export(project, (p) => setExportProgress(p));
+
+                setExportStatus('completed');
+            } catch (error) {
+                console.error('Fast Export Failed:', error);
+                alert('Export failed: ' + (error as Error).message);
+                setExportStatus('idle');
+            }
+        }, 100);
     };
 
     const cancelExport = () => {
@@ -875,7 +949,11 @@ export function EditorPage() {
                     tracks={tracks}
                     clips={clips}
                     assets={assets} // Still needed for initial state perhaps, or pipeline handles it
-                    onApplyScript={() => { }} // Legacy prop might be unused now? ScriptPanel internals use pipelines.
+                    onApplyScript={(newClips) => {
+                        updateClips(newClips);
+                        // Ensure selection remains valid
+                        setSelectedClipIds(prev => prev.filter(id => newClips.some(c => c.id === id)));
+                    }}
                     onAddClip={(clip) => globalCommandManager.execute(new AddClipCommand(commandContext, clip))}
                     onUpdateClip={(id, updates) => globalCommandManager.execute(new UpdateClipCommand(commandContext, id, updates))}
                     onRemoveClip={(id) => globalCommandManager.execute(new RemoveClipCommand(commandContext, id))}

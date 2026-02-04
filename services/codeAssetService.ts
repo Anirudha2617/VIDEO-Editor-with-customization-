@@ -435,8 +435,7 @@ export function createAssetFromCode(
             duration: code.duration || 5,
             width: code.width,
             height: code.height,
-            codeSource,
-            thumbnail: code.thumbnail // explicit for VideoAsset
+            thumbnail: code.thumbnail
         };
     } else if (type === MediaType.IMAGE) {
         return {
@@ -444,14 +443,12 @@ export function createAssetFromCode(
             type: MediaType.IMAGE,
             width: code.width,
             height: code.height,
-            codeSource
         };
     } else if (type === MediaType.TRANSITION || type === MediaType.EFFECT || type === MediaType.ANIMATION || type === MediaType.SHAPE) {
         return {
             ...base,
             type: type as any,
             subtype: subtype as any,
-            codeSource,
             duration: code.duration,
             width: code.width,
             height: code.height
@@ -461,10 +458,6 @@ export function createAssetFromCode(
         return {
             ...base,
             type: MediaType.TEXT,
-            codeSource // Technically TextAsset doesn't have codeSource in new model, but we might have coerced it in demo.
-            // For strict compliance, TextAsset shouldn't have codeSource.
-            // But if we want to support "Code Text", we need to genericize it.
-            // Let's return it as casted Asset for now to avoid breaking legacy logic if possible.
         } as Asset;
     }
 }

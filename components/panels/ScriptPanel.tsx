@@ -77,13 +77,20 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
         const code = editorRef.current.getValue();
         const lines = code.split('\n');
 
+        // Prevent echo loops
+        isSyncingSelection.current = true;
+
         for (let i = 0; i < lines.length; i++) {
-            if (lines[i].includes(`"${selectedId}"`)) {
+            // Precise match for "id": "selectedId"
+            if (lines[i].match(new RegExp(`"id":\\s*"${selectedId}"`))) {
                 editorRef.current.revealLineInCenter(i + 1);
                 editorRef.current.setPosition({ lineNumber: i + 1, column: 1 });
                 break;
             }
         }
+
+        // Reset guard after short delay to allow editor event to settle
+        setTimeout(() => { isSyncingSelection.current = false; }, 100);
     }, [selectedClipIds, autoSelect]);
 
     // Editor -> Timeline Sync
